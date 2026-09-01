@@ -19,7 +19,7 @@ class ManifestPrivacyTest {
     private val packageManager = context.packageManager
 
     @Test
-    fun productionPackageHasOnlyNetworkStatePermission() {
+    fun productionPackageHasOnlyApprovedNormalPermissions() {
         val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             packageManager.getPackageInfo(
                 context.packageName,
@@ -31,7 +31,10 @@ class ManifestPrivacyTest {
         }
 
         assertEquals(
-            setOf(Manifest.permission.ACCESS_NETWORK_STATE),
+            setOf(
+                Manifest.permission.ACCESS_NETWORK_STATE,
+                Manifest.permission.REQUEST_DELETE_PACKAGES,
+            ),
             packageInfo.requestedPermissions.orEmpty().toSet(),
         )
     }

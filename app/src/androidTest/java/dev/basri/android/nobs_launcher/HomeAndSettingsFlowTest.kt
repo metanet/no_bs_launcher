@@ -1,5 +1,6 @@
 package dev.basri.android.nobs_launcher
 
+import android.Manifest
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -25,6 +26,8 @@ import android.view.View
 import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Rect
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.widget.TextView
 import androidx.lifecycle.Lifecycle
@@ -240,6 +243,33 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun homeAlignsHeaderTopAndSettingsWithRightmostAppColumn() {
+        val apps = uniqueCatalogApps(4)
+        LayoutStore(context).save(
+            completedConfig(selectedPackages = apps.map(AppCandidate::packageName)).copy(
+                welcomeText = "Welcome, Basri",
+            ),
+        )
+
+        ActivityScenario.launch(HomeActivity::class.java).use {
+            onView(withId(R.id.app_grid)).check { view, _ ->
+                val grid = view as RecyclerView
+                val root = view.rootView
+                val welcome = root.findViewById<View>(R.id.welcome).screenBounds()
+                val appsTitle = root.findViewById<View>(R.id.apps_title).screenBounds()
+                val settings = root.findViewById<View>(R.id.settings).screenBounds()
+                val rightmostTile = checkNotNull(
+                    grid.findViewHolderForAdapterPosition(3)?.itemView,
+                ).screenBounds()
+
+                assertEquals(welcome.top, appsTitle.top)
+                assertEquals(welcome.top, settings.top)
+                assertEquals(rightmostTile.right, settings.right)
+            }
+        }
+    }
+
+    @Test
     fun homeOmitsSeparatorWhenThereAreNoFavorites() {
         LayoutStore(context).save(completedConfig(selectedPackages = emptyList()))
 
@@ -362,6 +392,17 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun launcherCanRequestPackageDeletion() {
+        assertEquals(
+            PackageManager.PERMISSION_GRANTED,
+            context.packageManager.checkPermission(
+                Manifest.permission.REQUEST_DELETE_PACKAGES,
+                context.packageName,
+            ),
+        )
+    }
+
+    @Test
     fun failedLaunchKeepsHomeResumedAndShowsAnError() {
         val brokenApp = uniqueCatalogApps(1).single()
         LayoutStore(context).save(completedConfig(listOf(brokenApp.packageName)))
@@ -408,6 +449,10 @@ class HomeAndSettingsFlowTest {
         onActivity { activity ->
             activity.findViewById<RecyclerView>(R.id.app_grid).itemAnimator?.endAnimations()
         }
+    }
+
+    private fun View.screenBounds() = Rect().also { bounds ->
+        assertTrue(getGlobalVisibleRect(bounds))
     }
 
     private fun runShell(command: String): String {
