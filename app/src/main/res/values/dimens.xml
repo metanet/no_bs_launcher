@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="screen_padding">32dp</dimen>
+    <dimen name="panel_gap">32dp</dimen>
+    <dimen name="tile_gap">12dp</dimen>
+    <dimen name="tile_corner">14dp</dimen>
+    <dimen name="focus_stroke">3dp</dimen>
+    <dimen name="clock_size">64sp</dimen>
+    <dimen name="date_size">24sp</dimen>
+    <dimen name="status_size">18sp</dimen>
+    <dimen name="app_label_size">16sp</dimen>
+</resources>

@@ -1,0 +1,2 @@
+-keep class dev.basri.android.nobs_launcher.ui.HomeActivity { *; }
+-keep class dev.basri.android.nobs_launcher.ui.SettingsActivity { *; }

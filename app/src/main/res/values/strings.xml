@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">No bullshit launcher</string>
+    <string name="apps">Apps</string>
+    <string name="settings">Settings</string>
+    <string name="welcome_text">Welcome text</string>
+    <string name="wifi_label">Wi-Fi name</string>
+    <string name="location_label">Location</string>
+    <string name="open_android_settings">Android settings</string>
+    <string name="save">Save</string>
+    <string name="show_location">Show location</string>
+    <string name="show_vpn_status">Show VPN status</string>
+    <string name="show_system_stats">Show system stats</string>
+    <string name="no_apps_selected">No apps selected. Open Manage apps to choose what appears here.</string>
+    <string name="unable_to_open">Unable to open %1$s</string>
+    <string name="unable_to_open_settings">Unable to open Android settings</string>
+    <string name="vpn_connected">VPN connected</string>
+    <string name="memory_stats">Memory   %1$s</string>
+    <string name="cpu_stats">CPU      %1$s</string>
+    <string name="storage_stats">Storage  %1$s</string>
+    <string name="network_stats">Network  %1$s</string>
+    <string name="memory_unavailable">Memory   unavailable</string>
+    <string name="cpu_unavailable">CPU      unavailable</string>
+    <string name="storage_unavailable">Storage  unavailable</string>
+    <string name="network_unavailable">Network  unavailable</string>
+    <string name="move_mode_hint">Use arrows to move · OK saves · Back cancels</string>
+</resources>

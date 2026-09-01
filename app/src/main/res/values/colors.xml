@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="background_start">#10151E</color>
+    <color name="background_end">#111827</color>
+    <color name="panel_divider">#344052</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#AAB6C8</color>
+    <color name="tile_background">#202A38</color>
+    <color name="tile_focused">#2B3D55</color>
+    <color name="focus_blue">#66A6FF</color>
+    <color name="move_amber">#FFB454</color>
+</resources>
