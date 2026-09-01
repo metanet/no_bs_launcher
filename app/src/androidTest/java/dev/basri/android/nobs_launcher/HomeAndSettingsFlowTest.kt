@@ -10,6 +10,7 @@ import androidx.test.espresso.action.ViewActions.longClick
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.RootMatchers.withDecorView
 import androidx.test.espresso.matcher.ViewMatchers.isChecked
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
@@ -20,6 +21,10 @@ import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import android.view.KeyEvent
+import android.view.View
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.Intent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.widget.TextView
 import androidx.lifecycle.Lifecycle
@@ -28,12 +33,16 @@ import dev.basri.android.nobs_launcher.data.AppCandidate
 import dev.basri.android.nobs_launcher.data.AppCatalog
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.model.LauncherConfig
+import dev.basri.android.nobs_launcher.model.HomeAppSectionsPolicy
 import dev.basri.android.nobs_launcher.ui.HomeActivity
 import dev.basri.android.nobs_launcher.ui.SettingsActivity
 import org.hamcrest.Matchers.allOf
+import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.not
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.FileInputStream
@@ -91,7 +100,7 @@ class HomeAndSettingsFlowTest {
             onView(withId(R.id.network_stats)).check(matches(isDisplayed()))
             onView(withId(R.id.settings)).check(matches(isDisplayed()))
             onView(withId(R.id.app_grid)).check(matches(isDisplayed()))
-            onView(withId(R.id.empty_state)).check(matches(isDisplayed()))
+            onView(withId(R.id.empty_state)).check(matches(withEffectiveVisibility(GONE)))
         }
     }
 
@@ -189,42 +198,166 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
-    fun homeShowsOnlySelectedAppsInStoredOrder() {
-        val (first, second, hidden) = uniqueCatalogApps(3)
+    fun homeUsesTwentyEightySplitAndShowsFavoritesThenAlphabeticalRemainingApps() {
+        val (first, second) = uniqueCatalogApps(2)
+        val favoritePackages = listOf(second.packageName, first.packageName)
+        val sections = HomeAppSectionsPolicy.compose(
+            catalogApps = AppCatalog(context).loadApps(),
+            favoritePackages = favoritePackages,
+        )
         LayoutStore(context).save(
-            completedConfig(selectedPackages = listOf(second.packageName, first.packageName)),
+            completedConfig(selectedPackages = favoritePackages),
         )
 
         ActivityScenario.launch(HomeActivity::class.java).use {
             onView(withContentDescription(first.label)).check(matches(isDisplayed()))
             onView(withContentDescription(second.label)).check(matches(isDisplayed()))
-            onView(withContentDescription(hidden.label)).check(doesNotExist())
             onView(withId(R.id.app_grid)).check { view, _ ->
                 val grid = view as RecyclerView
-                val firstTile = grid.findViewHolderForAdapterPosition(0)?.itemView
-                assertEquals(second.label, firstTile?.contentDescription?.toString())
+                val infoPanel = view.rootView.findViewById<android.view.View>(R.id.info_panel)
+                val appsPanel = view.rootView.findViewById<android.view.View>(R.id.apps_panel)
+                assertTrue(kotlin.math.abs(appsPanel.width - infoPanel.width * 4) <= 4)
+
+                assertEquals(
+                    second.label,
+                    grid.findViewHolderForAdapterPosition(0)?.itemView?.contentDescription?.toString(),
+                )
+                assertEquals(
+                    first.label,
+                    grid.findViewHolderForAdapterPosition(1)?.itemView?.contentDescription?.toString(),
+                )
+                val separator = grid.findViewHolderForAdapterPosition(2)?.itemView
+                assertEquals(R.id.app_separator, separator?.id)
+                assertFalse(separator?.isFocusable ?: true)
+                val layoutManager = grid.layoutManager as androidx.recyclerview.widget.GridLayoutManager
+                assertEquals(4, layoutManager.spanSizeLookup.getSpanSize(2))
+                assertEquals(
+                    sections.remaining.first().label,
+                    grid.findViewHolderForAdapterPosition(3)?.itemView?.contentDescription?.toString(),
+                )
             }
         }
     }
 
     @Test
-    fun moveModeOkPersistsAndBackCancels() {
-        val (first, second) = uniqueCatalogApps(2)
-        val originalOrder = listOf(first.packageName, second.packageName)
+    fun homeOmitsSeparatorWhenThereAreNoFavorites() {
+        LayoutStore(context).save(completedConfig(selectedPackages = emptyList()))
+
+        ActivityScenario.launch(HomeActivity::class.java).use {
+            onView(withId(R.id.app_grid)).check { view, _ ->
+                val grid = view as RecyclerView
+                assertEquals(AppCatalog(context).loadApps().size, grid.adapter?.itemCount)
+                assertTrue(
+                    (0 until grid.childCount).none { index ->
+                        grid.getChildAt(index).id == R.id.app_separator
+                    },
+                )
+            }
+        }
+    }
+
+    @Test
+    fun remainingAppMenuAddsFavoriteAndFavoriteMenuRemovesIt() {
+        val app = uniqueCatalogApps(1).single()
+        LayoutStore(context).save(completedConfig())
+
+        ActivityScenario.launch(HomeActivity::class.java).use {
+            onView(withContentDescription(app.label)).perform(longClick())
+            onView(withText("Add to favorites")).check(matches(isDisplayed()))
+            onView(withText("Uninstall app")).check(matches(isDisplayed()))
+            onView(withText("Move")).check(doesNotExist())
+            onView(withText("Remove from favorites")).check(doesNotExist())
+            onView(withText("Add to favorites")).perform(click())
+            assertEquals(listOf(app.packageName), LayoutStore(context).load().selectedPackages)
+
+            onView(withContentDescription(app.label)).perform(longClick())
+            onView(withText("Move")).check(matches(isDisplayed()))
+            onView(withText("Remove from favorites")).check(matches(isDisplayed()))
+            onView(withText("Uninstall app")).check(matches(isDisplayed()))
+            onView(withText("Add to favorites")).check(doesNotExist())
+            onView(withText("Remove from favorites")).perform(click())
+            assertEquals(emptyList<String>(), LayoutStore(context).load().selectedPackages)
+        }
+    }
+
+    @Test
+    fun moveMenuShiftsAcrossRowsOkPersistsAndBackCancels() {
+        val apps = uniqueCatalogApps(5)
+        val originalOrder = apps.map(AppCandidate::packageName)
         LayoutStore(context).save(completedConfig(selectedPackages = originalOrder))
 
         ActivityScenario.launch(HomeActivity::class.java).use { scenario ->
-            onView(withContentDescription(first.label)).perform(longClick())
+            lateinit var activityDecor: View
+            scenario.onActivity { activityDecor = it.window.decorView }
+            onView(
+                allOf(
+                    withId(R.id.app_tile),
+                    withContentDescription(apps[3].label),
+                ),
+            ).inRoot(withDecorView(`is`(activityDecor))).perform(longClick())
+            onView(withText("Move")).perform(click())
             onView(withId(R.id.move_mode_hint)).check(matches(isDisplayed()))
             scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_RIGHT)
             scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_CENTER)
-            assertEquals(originalOrder.reversed(), LayoutStore(context).load().selectedPackages)
+            val movedOrder = listOf(apps[0], apps[1], apps[2], apps[4], apps[3])
+                .map(AppCandidate::packageName)
+            assertEquals(movedOrder, LayoutStore(context).load().selectedPackages)
+            scenario.finishGridAnimations()
 
-            onView(withContentDescription(second.label)).perform(longClick())
+            onView(
+                allOf(
+                    withId(R.id.app_tile),
+                    withContentDescription(apps[3].label),
+                ),
+            ).inRoot(withDecorView(`is`(activityDecor))).perform(longClick())
+            onView(withText("Move")).perform(click())
             scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_LEFT)
             scenario.pressActivityKey(KeyEvent.KEYCODE_BACK)
-            assertEquals(originalOrder.reversed(), LayoutStore(context).load().selectedPackages)
+            assertEquals(movedOrder, LayoutStore(context).load().selectedPackages)
             onView(withId(R.id.move_mode_hint)).check(matches(withEffectiveVisibility(GONE)))
+            scenario.finishGridAnimations()
+
+            onView(
+                allOf(
+                    withId(R.id.app_tile),
+                    withContentDescription(apps[3].label),
+                ),
+            ).inRoot(withDecorView(`is`(activityDecor))).perform(longClick())
+            onView(withText("Move")).perform(click())
+            scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_UP)
+            scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_DOWN)
+            scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_CENTER)
+            assertEquals(movedOrder, LayoutStore(context).load().selectedPackages)
+        }
+    }
+
+    @Test
+    fun uninstallActionSendsPackageDeleteIntentWithoutChangingFavoriteState() {
+        val app = uniqueCatalogApps(1).single()
+        val original = completedConfig(selectedPackages = listOf(app.packageName))
+        LayoutStore(context).save(original)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var observedIntent: Intent? = null
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
+                if (intent.action != Intent.ACTION_DELETE) return null
+                observedIntent = intent
+                return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+            }
+        }
+        instrumentation.addMonitor(monitor)
+
+        try {
+            ActivityScenario.launch(HomeActivity::class.java).use {
+                onView(withContentDescription(app.label)).perform(longClick())
+                onView(withText("Uninstall app")).perform(click())
+                assertEquals(Intent.ACTION_DELETE, observedIntent?.action)
+                assertEquals("package:${app.packageName}", observedIntent?.data?.toString())
+                assertEquals(original, LayoutStore(context).load())
+                assertTrue(context.packageManager.getLaunchIntentForPackage(app.packageName) != null)
+            }
+        } finally {
+            instrumentation.removeMonitor(monitor)
         }
     }
 
@@ -268,6 +401,12 @@ class HomeAndSettingsFlowTest {
         onActivity { activity ->
             activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+        }
+    }
+
+    private fun ActivityScenario<HomeActivity>.finishGridAnimations() {
+        onActivity { activity ->
+            activity.findViewById<RecyclerView>(R.id.app_grid).itemAnimator?.endAnimations()
         }
     }
 

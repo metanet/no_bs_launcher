@@ -1,7 +1,9 @@
 package dev.basri.android.nobs_launcher.ui
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +16,7 @@ import dev.basri.android.nobs_launcher.data.AppCatalog
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.databinding.ActivityHomeBinding
 import dev.basri.android.nobs_launcher.model.LauncherConfigPolicy
+import dev.basri.android.nobs_launcher.model.HomeAppSectionsPolicy
 import dev.basri.android.nobs_launcher.stats.SystemStatsDisplay
 import dev.basri.android.nobs_launcher.stats.SystemStatsMonitor
 import dev.basri.android.nobs_launcher.status.VpnStatusMonitor
@@ -27,7 +30,8 @@ class HomeActivity : Activity() {
     private lateinit var clockController: ClockController
     private lateinit var vpnStatusMonitor: VpnStatusMonitor
     private lateinit var systemStatsMonitor: SystemStatsMonitor
-    private var visibleApps = listOf<AppCandidate>()
+    private var favoriteApps = listOf<AppCandidate>()
+    private var remainingApps = listOf<AppCandidate>()
     private var moveSnapshot: List<String>? = null
     private var movingPackage: String? = null
     private var swallowKeyUp: Int? = null
@@ -45,9 +49,13 @@ class HomeActivity : Activity() {
         catalog = AppCatalog(this)
         adapter = AppGridAdapter(
             onOpen = ::openApp,
-            onStartMoving = ::startMoveMode,
+            onLongPress = ::showAppActions,
         )
-        binding.appGrid.layoutManager = GridLayoutManager(this, GRID_COLUMNS)
+        binding.appGrid.layoutManager = GridLayoutManager(this, GRID_COLUMNS).apply {
+            spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                override fun getSpanSize(position: Int): Int = adapter.spanSizeAt(position)
+            }
+        }
         binding.appGrid.adapter = adapter
         binding.settings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -102,10 +110,11 @@ class HomeActivity : Activity() {
         }
         if (moveSnapshot != null && event.action == KeyEvent.ACTION_DOWN) {
             return when (event.keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> moveByDirection(-1, preventRowWrap = true)
-                KeyEvent.KEYCODE_DPAD_RIGHT -> moveByDirection(1, preventRowWrap = true)
-                KeyEvent.KEYCODE_DPAD_UP -> moveByDirection(-GRID_COLUMNS)
-                KeyEvent.KEYCODE_DPAD_DOWN -> moveByDirection(GRID_COLUMNS)
+                KeyEvent.KEYCODE_DPAD_LEFT -> moveByDirection(-1)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> moveByDirection(1)
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                -> true
                 KeyEvent.KEYCODE_DPAD_CENTER,
                 KeyEvent.KEYCODE_ENTER,
                 KeyEvent.KEYCODE_NUMPAD_ENTER,
@@ -146,10 +155,11 @@ class HomeActivity : Activity() {
         )
         if (normalized != config) store.save(normalized)
 
-        val candidatesByPackage = catalogApps.associateBy(AppCandidate::packageName)
-        visibleApps = normalized.selectedPackages.mapNotNull(candidatesByPackage::get)
-        adapter.submitApps(visibleApps)
-        binding.emptyState.visibility = if (visibleApps.isEmpty()) View.VISIBLE else View.GONE
+        val sections = HomeAppSectionsPolicy.compose(catalogApps, normalized.selectedPackages)
+        favoriteApps = sections.favorites
+        remainingApps = sections.remaining
+        adapter.submitSections(favoriteApps, remainingApps)
+        binding.emptyState.visibility = if (catalogApps.isEmpty()) View.VISIBLE else View.GONE
         binding.welcome.text = normalized.welcomeText
         binding.welcome.visibility = if (normalized.welcomeText.isBlank()) View.GONE else View.VISIBLE
         binding.wifi.text = normalized.wifiLabel
@@ -176,13 +186,13 @@ class HomeActivity : Activity() {
         }
 
         val focusIndex = preferredFocusPackage
-            ?.let { packageName -> visibleApps.indexOfFirst { it.packageName == packageName } }
+            ?.let(adapter::positionOfPackage)
             ?.takeIf { it >= 0 }
         binding.appGrid.post {
             if (focusIndex != null) {
                 binding.appGrid.findViewHolderForAdapterPosition(focusIndex)?.itemView?.requestFocus()
                     ?: binding.appGrid.scrollToPosition(focusIndex)
-            } else if (visibleApps.isNotEmpty()) {
+            } else if (catalogApps.isNotEmpty()) {
                 binding.appGrid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
             } else {
                 binding.settings.requestFocus()
@@ -210,35 +220,80 @@ class HomeActivity : Activity() {
         mainHandler.postDelayed(hideLaunchError, LAUNCH_ERROR_DURATION_MS)
     }
 
+    private fun showAppActions(app: AppCandidate, favorite: Boolean) {
+        if (moveSnapshot != null) return
+        val actions = if (favorite) {
+            listOf(AppAction.MOVE, AppAction.REMOVE_FAVORITE, AppAction.UNINSTALL)
+        } else {
+            listOf(AppAction.ADD_FAVORITE, AppAction.UNINSTALL)
+        }
+        val labels = actions.map { action -> getString(action.labelResource) }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(app.label)
+            .setItems(labels) { _, index ->
+                when (actions[index]) {
+                    AppAction.ADD_FAVORITE -> setFavorite(app, favorite = true)
+                    AppAction.MOVE -> startMoveMode(app)
+                    AppAction.REMOVE_FAVORITE -> setFavorite(app, favorite = false)
+                    AppAction.UNINSTALL -> uninstallApp(app)
+                }
+            }
+            .show()
+    }
+
+    private fun setFavorite(app: AppCandidate, favorite: Boolean) {
+        val updated = LauncherConfigPolicy.setVisible(
+            config = store.load(),
+            packageName = app.packageName,
+            visible = favorite,
+        )
+        store.save(updated)
+        bindHome(app.packageName)
+    }
+
+    private fun uninstallApp(app: AppCandidate) {
+        runCatching {
+            startActivity(
+                Intent(
+                    Intent.ACTION_DELETE,
+                    Uri.parse("package:${app.packageName}"),
+                ),
+            )
+        }.onFailure {
+            showActionError(getString(R.string.unable_to_uninstall, app.label))
+        }
+    }
+
+    private fun showActionError(message: String) {
+        binding.launchError.text = message
+        binding.launchError.visibility = View.VISIBLE
+        mainHandler.removeCallbacks(hideLaunchError)
+        mainHandler.postDelayed(hideLaunchError, LAUNCH_ERROR_DURATION_MS)
+    }
+
     private fun startMoveMode(app: AppCandidate) {
         if (moveSnapshot != null) return
-        moveSnapshot = visibleApps.map(AppCandidate::packageName)
+        moveSnapshot = favoriteApps.map(AppCandidate::packageName)
         movingPackage = app.packageName
         adapter.setMovingPackage(app.packageName)
         binding.moveModeHint.visibility = View.VISIBLE
     }
 
-    private fun moveByDirection(delta: Int, preventRowWrap: Boolean = false): Boolean {
+    private fun moveByDirection(delta: Int): Boolean {
         val packageName = movingPackage ?: return true
-        val fromIndex = visibleApps.indexOfFirst { it.packageName == packageName }
+        val fromIndex = favoriteApps.indexOfFirst { it.packageName == packageName }
         if (fromIndex < 0) return true
-        if (preventRowWrap) {
-            val column = fromIndex % GRID_COLUMNS
-            if ((delta < 0 && column == 0) || (delta > 0 && column == GRID_COLUMNS - 1)) {
-                return true
-            }
-        }
         val toIndex = fromIndex + delta
-        if (toIndex !in visibleApps.indices) return true
+        if (toIndex !in favoriteApps.indices) return true
 
         val reorderedPackages = LauncherConfigPolicy.move(
-            visibleApps.map(AppCandidate::packageName),
+            favoriteApps.map(AppCandidate::packageName),
             fromIndex,
             toIndex,
         )
-        val byPackage = visibleApps.associateBy(AppCandidate::packageName)
-        visibleApps = reorderedPackages.mapNotNull(byPackage::get)
-        adapter.submitApps(visibleApps)
+        val byPackage = favoriteApps.associateBy(AppCandidate::packageName)
+        favoriteApps = reorderedPackages.mapNotNull(byPackage::get)
+        adapter.submitSections(favoriteApps, remainingApps)
         adapter.setMovingPackage(packageName)
         requestTileFocus(toIndex)
         return true
@@ -246,7 +301,7 @@ class HomeActivity : Activity() {
 
     private fun saveMoveMode() {
         val config = store.load().copy(
-            selectedPackages = visibleApps.map(AppCandidate::packageName),
+            selectedPackages = favoriteApps.map(AppCandidate::packageName),
         )
         store.save(config)
         finishMoveMode()
@@ -254,10 +309,10 @@ class HomeActivity : Activity() {
 
     private fun cancelMoveMode() {
         val originalPackages = moveSnapshot.orEmpty()
-        val byPackage = visibleApps.associateBy(AppCandidate::packageName)
-        visibleApps = originalPackages.mapNotNull(byPackage::get)
-        adapter.submitApps(visibleApps)
-        val focusIndex = visibleApps.indexOfFirst { it.packageName == movingPackage }
+        val byPackage = favoriteApps.associateBy(AppCandidate::packageName)
+        favoriteApps = originalPackages.mapNotNull(byPackage::get)
+        adapter.submitSections(favoriteApps, remainingApps)
+        val focusIndex = favoriteApps.indexOfFirst { it.packageName == movingPackage }
         finishMoveMode()
         if (focusIndex >= 0) requestTileFocus(focusIndex)
     }
@@ -307,5 +362,12 @@ class HomeActivity : Activity() {
     private companion object {
         const val GRID_COLUMNS = 4
         const val LAUNCH_ERROR_DURATION_MS = 4_000L
+    }
+
+    private enum class AppAction(val labelResource: Int) {
+        ADD_FAVORITE(R.string.add_to_favorites),
+        MOVE(R.string.move),
+        REMOVE_FAVORITE(R.string.remove_from_favorites),
+        UNINSTALL(R.string.uninstall_app),
     }
 }

@@ -23,6 +23,18 @@ both debug and release builds before accepting the signed APK. The install
 script uses only `adb install -r`; it refuses to update an existing package
 whose signing certificate differs.
 
+## Home app list controls
+
+Favorites appear first in their saved order. A divider separates them from all
+other launchable apps, which are sorted alphabetically.
+
+- Long-press a favorite for Move, Remove from favorites, or Uninstall app.
+- Long-press another app for Add to favorites or Uninstall app.
+- In Move mode, Left/Right shifts the favorite, OK saves, and Back cancels.
+
+Uninstall app opens Android's own confirmation screen; the launcher cannot
+silently remove an application.
+
 ## First launch and Home selection
 
 Open No bullshit launcher once, enter the welcome, Wi-Fi, and location labels,
@@ -83,9 +95,9 @@ Do not uninstall either launcher to switch between them.
 ## Verified release
 
 - APK: `app/build/outputs/apk/release/app-release.apk`
-- Version: `0.1.0`
+- Version: `0.2.0`
 - Minimum Android: 6.0 / API 23
-- Size: 208,794 bytes
+- Size: 213,888 bytes
 - Signing certificate SHA-256:
   `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`
 

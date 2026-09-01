@@ -9,14 +9,15 @@
     tools:ignore="NestedWeights">
 
     <LinearLayout
+        android:id="@+id/info_panel"
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_marginEnd="@dimen/panel_gap"
-        android:layout_weight="3"
+        android:layout_weight="1"
         android:gravity="center_vertical"
         android:orientation="vertical"
         android:paddingStart="0dp"
-        android:paddingEnd="16dp">
+        android:paddingEnd="8dp">
 
         <TextView
             android:id="@+id/welcome"
@@ -25,7 +26,7 @@
             android:ellipsize="end"
             android:maxLines="2"
             android:textColor="@color/text_primary"
-            android:textSize="22sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:visibility="gone" />
 
@@ -86,7 +87,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/memory_unavailable"
                 android:textColor="@color/text_secondary"
-                android:textSize="16sp" />
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/cpu_stats"
@@ -95,7 +96,7 @@
                 android:layout_marginTop="3dp"
                 android:text="@string/cpu_unavailable"
                 android:textColor="@color/text_secondary"
-                android:textSize="16sp" />
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/storage_stats"
@@ -104,7 +105,7 @@
                 android:layout_marginTop="3dp"
                 android:text="@string/storage_unavailable"
                 android:textColor="@color/text_secondary"
-                android:textSize="16sp" />
+                android:textSize="13sp" />
 
             <TextView
                 android:id="@+id/network_stats"
@@ -113,7 +114,7 @@
                 android:layout_marginTop="3dp"
                 android:text="@string/network_unavailable"
                 android:textColor="@color/text_secondary"
-                android:textSize="16sp" />
+                android:textSize="13sp" />
         </LinearLayout>
 
         <Space
@@ -137,10 +138,11 @@
         android:background="@color/panel_divider" />
 
     <LinearLayout
+        android:id="@+id/apps_panel"
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_marginStart="@dimen/panel_gap"
-        android:layout_weight="7"
+        android:layout_weight="4"
         android:orientation="vertical">
 
         <LinearLayout

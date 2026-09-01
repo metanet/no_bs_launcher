@@ -24,6 +24,7 @@ class SystemStatsReader(context: Context) {
             cpuCount = cpuCount,
             cpuMaxFrequencyHz = readMaxCpuFrequency(cpuCount),
             cpuCounters = readCpuCounters(),
+            cpuIdleCounters = readCpuIdleCounters(cpuCount),
             networkCounters = readNetworkCounters(),
         )
     }
@@ -42,6 +43,29 @@ class SystemStatsReader(context: Context) {
             lines.firstOrNull()?.let(SystemStatsParsers::parseCpuCounters)
         }
     }.getOrNull()
+
+    private fun readCpuIdleCounters(cpuCount: Int): CpuIdleCounters? {
+        if (cpuCount <= 0) return null
+        return runCatching {
+            val idleMicros = (0 until cpuCount).sumOf { cpuIndex ->
+                val stateDirectories = File(
+                    "/sys/devices/system/cpu/cpu$cpuIndex/cpuidle",
+                ).listFiles { file ->
+                    file.isDirectory && CPU_IDLE_STATE_PATTERN.matches(file.name)
+                }?.toList().orEmpty()
+                check(stateDirectories.isNotEmpty())
+                stateDirectories.sumOf { stateDirectory ->
+                    File(stateDirectory, "time").readText().trim().toLong().also {
+                        check(it >= 0)
+                    }
+                }
+            }
+            CpuIdleCounters(
+                idleMicros = idleMicros,
+                capturedAtMillis = SystemClock.elapsedRealtime(),
+            )
+        }.getOrNull()
+    }
 
     private fun readMaxCpuFrequency(cpuCount: Int): Long? = (0 until cpuCount)
         .mapNotNull { cpuIndex ->
@@ -76,5 +100,6 @@ class SystemStatsReader(context: Context) {
         const val PROC_STAT = "/proc/stat"
         const val KILOHERTZ_TO_HERTZ = 1_000L
         val CPU_FREQUENCY_FILES = listOf("cpuinfo_max_freq", "scaling_max_freq")
+        val CPU_IDLE_STATE_PATTERN = Regex("state\\d+")
     }
 }

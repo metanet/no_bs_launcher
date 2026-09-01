@@ -5,6 +5,11 @@ data class CpuCounters(
     val totalTicks: Long,
 )
 
+data class CpuIdleCounters(
+    val idleMicros: Long,
+    val capturedAtMillis: Long,
+)
+
 data class NetworkCounters(
     val receivedBytes: Long,
     val transmittedBytes: Long,
@@ -24,6 +29,7 @@ data class RawSystemStats(
     val cpuCount: Int,
     val cpuMaxFrequencyHz: Long?,
     val cpuCounters: CpuCounters?,
+    val cpuIdleCounters: CpuIdleCounters?,
     val networkCounters: NetworkCounters?,
 )
 

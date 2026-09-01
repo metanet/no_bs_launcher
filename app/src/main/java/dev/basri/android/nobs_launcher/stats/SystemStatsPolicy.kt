@@ -15,6 +15,22 @@ object SystemStatsPolicy {
             .coerceIn(0, 100)
     }
 
+    fun cpuidleCpuUsagePercent(
+        previous: CpuIdleCounters?,
+        current: CpuIdleCounters?,
+        cpuCount: Int,
+    ): Int? {
+        if (previous == null || current == null || cpuCount <= 0) return null
+        val idleDeltaMicros = current.idleMicros - previous.idleMicros
+        val elapsedMillis = current.capturedAtMillis - previous.capturedAtMillis
+        if (idleDeltaMicros < 0 || elapsedMillis <= 0) return null
+        val capacityMicros = elapsedMillis * 1_000.0 * cpuCount
+        val busyMicros = (capacityMicros - idleDeltaMicros).coerceAtLeast(0.0)
+        return ((busyMicros / capacityMicros) * 100.0)
+            .roundToInt()
+            .coerceIn(0, 100)
+    }
+
     fun networkRates(
         previous: NetworkCounters?,
         current: NetworkCounters?,
@@ -33,10 +49,20 @@ object SystemStatsPolicy {
 
     fun display(previous: RawSystemStats?, current: RawSystemStats): SystemStatsDisplay {
         val cpuUsage = cpuUsagePercent(previous?.cpuCounters, current.cpuCounters)
+            ?: cpuidleCpuUsagePercent(
+                previous?.cpuIdleCounters,
+                current.cpuIdleCounters,
+                current.cpuCount,
+            )
         val rates = networkRates(previous?.networkCounters, current.networkCounters)
         return SystemStatsDisplay(
             memory = formatCapacityUse(current.totalMemoryBytes, current.availableMemoryBytes),
-            cpu = formatCpu(cpuUsage, current.cpuCount, current.cpuMaxFrequencyHz),
+            cpu = formatCpu(
+                usagePercent = cpuUsage,
+                hasUtilizationSource = current.cpuCounters != null || current.cpuIdleCounters != null,
+                cpuCount = current.cpuCount,
+                maxFrequencyHz = current.cpuMaxFrequencyHz,
+            ),
             storage = formatCapacityUse(current.totalStorageBytes, current.availableStorageBytes),
             network = when {
                 current.networkCounters == null -> UNAVAILABLE
@@ -78,8 +104,17 @@ object SystemStatsPolicy {
         return "$compactUsed / $total · $percent%"
     }
 
-    private fun formatCpu(usagePercent: Int?, cpuCount: Int, maxFrequencyHz: Long?): String {
-        val usage = usagePercent?.let { "$it%" } ?: "usage unavailable"
+    private fun formatCpu(
+        usagePercent: Int?,
+        hasUtilizationSource: Boolean,
+        cpuCount: Int,
+        maxFrequencyHz: Long?,
+    ): String {
+        val usage = when {
+            usagePercent != null -> "$usagePercent%"
+            hasUtilizationSource -> MEASURING
+            else -> "utilization unavailable"
+        }
         val capacity = buildList {
             if (cpuCount > 0) add("$cpuCount ${if (cpuCount == 1) "core" else "cores"}")
             maxFrequencyHz?.takeIf { it > 0 }?.let { add(formatFrequency(it)) }

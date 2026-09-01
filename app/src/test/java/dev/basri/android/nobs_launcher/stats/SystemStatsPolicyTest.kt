@@ -6,6 +6,53 @@ import org.junit.Test
 
 class SystemStatsPolicyTest {
     @Test
+    fun cpuidleCpuUsageUsesIdleTimeAndLogicalCpuCapacity() {
+        assertEquals(
+            50,
+            SystemStatsPolicy.cpuidleCpuUsagePercent(
+                previous = CpuIdleCounters(idleMicros = 1_000_000, capturedAtMillis = 1_000),
+                current = CpuIdleCounters(idleMicros = 3_000_000, capturedAtMillis = 2_000),
+                cpuCount = 4,
+            ),
+        )
+        assertEquals(
+            0,
+            SystemStatsPolicy.cpuidleCpuUsagePercent(
+                previous = CpuIdleCounters(idleMicros = 1_000_000, capturedAtMillis = 1_000),
+                current = CpuIdleCounters(idleMicros = 9_000_000, capturedAtMillis = 2_000),
+                cpuCount = 4,
+            ),
+        )
+    }
+
+    @Test
+    fun cpuidleCpuUsageRejectsInvalidDeltasAndCapacity() {
+        val baseline = CpuIdleCounters(idleMicros = 5_000, capturedAtMillis = 1_000)
+
+        assertNull(
+            SystemStatsPolicy.cpuidleCpuUsagePercent(
+                baseline,
+                CpuIdleCounters(idleMicros = 4_000, capturedAtMillis = 2_000),
+                cpuCount = 4,
+            ),
+        )
+        assertNull(
+            SystemStatsPolicy.cpuidleCpuUsagePercent(
+                baseline,
+                CpuIdleCounters(idleMicros = 6_000, capturedAtMillis = 1_000),
+                cpuCount = 4,
+            ),
+        )
+        assertNull(
+            SystemStatsPolicy.cpuidleCpuUsagePercent(
+                baseline,
+                CpuIdleCounters(idleMicros = 6_000, capturedAtMillis = 2_000),
+                cpuCount = 0,
+            ),
+        )
+    }
+
+    @Test
     fun cpuUsageUsesBusyAndTotalDeltas() {
         val previous = CpuCounters(idleTicks = 60, totalTicks = 100)
         val current = CpuCounters(idleTicks = 110, totalTicks = 200)
@@ -73,6 +120,7 @@ class SystemStatsPolicyTest {
             cpuCount = 4,
             cpuMaxFrequencyHz = 1_800_000_000,
             cpuCounters = CpuCounters(60, 100),
+            cpuIdleCounters = CpuIdleCounters(idleMicros = 1_000_000, capturedAtMillis = 1_000),
             networkCounters = NetworkCounters(1_000, 2_000, 1_000),
         )
         val current = previous.copy(
@@ -94,6 +142,61 @@ class SystemStatsPolicyTest {
     }
 
     @Test
+    fun displayPrefersProcCountersAndFallsBackToCpuidleUtilization() {
+        val previous = RawSystemStats(
+            totalMemoryBytes = 1,
+            availableMemoryBytes = 1,
+            totalStorageBytes = 1,
+            availableStorageBytes = 1,
+            cpuCount = 4,
+            cpuMaxFrequencyHz = null,
+            cpuCounters = CpuCounters(idleTicks = 90, totalTicks = 100),
+            cpuIdleCounters = CpuIdleCounters(idleMicros = 1_000_000, capturedAtMillis = 1_000),
+            networkCounters = null,
+        )
+        val current = previous.copy(
+            cpuCounters = CpuCounters(idleTicks = 165, totalTicks = 200),
+            cpuIdleCounters = CpuIdleCounters(idleMicros = 3_000_000, capturedAtMillis = 2_000),
+        )
+
+        assertEquals("25% · 4 cores", SystemStatsPolicy.display(previous, current).cpu)
+        assertEquals(
+            "50% · 4 cores",
+            SystemStatsPolicy.display(
+                previous.copy(cpuCounters = null),
+                current.copy(cpuCounters = null),
+            ).cpu,
+        )
+    }
+
+    @Test
+    fun displayDistinguishesMeasuringFromUnavailableCpuUtilization() {
+        val capacityOnly = RawSystemStats(
+            totalMemoryBytes = 0,
+            availableMemoryBytes = 0,
+            totalStorageBytes = 0,
+            availableStorageBytes = 0,
+            cpuCount = 4,
+            cpuMaxFrequencyHz = 2_000_000_000,
+            cpuCounters = null,
+            cpuIdleCounters = null,
+            networkCounters = null,
+        )
+        val measuring = capacityOnly.copy(
+            cpuIdleCounters = CpuIdleCounters(idleMicros = 1_000, capturedAtMillis = 1_000),
+        )
+
+        assertEquals(
+            "measuring… · 4 cores · 2.0 GHz",
+            SystemStatsPolicy.display(previous = null, current = measuring).cpu,
+        )
+        assertEquals(
+            "utilization unavailable · 4 cores · 2.0 GHz",
+            SystemStatsPolicy.display(previous = null, current = capacityOnly).cpu,
+        )
+    }
+
+    @Test
     fun unavailableSourcesAreDescribedHonestly() {
         val display = SystemStatsPolicy.display(
             previous = null,
@@ -105,12 +208,13 @@ class SystemStatsPolicyTest {
                 cpuCount = 0,
                 cpuMaxFrequencyHz = null,
                 cpuCounters = null,
+                cpuIdleCounters = null,
                 networkCounters = null,
             ),
         )
 
         assertEquals("unavailable", display.memory)
-        assertEquals("usage unavailable · capacity unavailable", display.cpu)
+        assertEquals("utilization unavailable · capacity unavailable", display.cpu)
         assertEquals("unavailable", display.storage)
         assertEquals("unavailable", display.network)
     }
