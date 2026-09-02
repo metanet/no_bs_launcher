@@ -74,7 +74,12 @@ object WebShortcutPolicy {
         val uri = runCatching { URI(candidate) }.getOrNull()
             ?: return ShortcutInput.Invalid(ShortcutField.URL, ShortcutError.INVALID)
         val scheme = uri.scheme?.lowercase(Locale.ROOT)
-        if (!uri.isAbsolute || scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+        if (
+            !uri.isAbsolute ||
+            scheme !in setOf("http", "https") ||
+            uri.host.isNullOrBlank() ||
+            uri.rawUserInfo != null
+        ) {
             return ShortcutInput.Invalid(ShortcutField.URL, ShortcutError.INVALID)
         }
         val normalizedUrl = scheme + candidate.substring(uri.scheme.length)

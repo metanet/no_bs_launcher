@@ -49,6 +49,7 @@ class WebShortcutPolicyTest {
             "custom://example.com/path",
             "https:///missing-host",
             "/relative/path",
+            "https://user:secret@example.com/private",
         )
 
         rejected.forEach { url ->
