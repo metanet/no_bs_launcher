@@ -9,6 +9,7 @@ import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.databinding.ItemWebShortcutBinding
 import dev.basri.android.nobs_launcher.model.WebShortcut
+import dev.basri.android.nobs_launcher.model.WebShortcutPolicy
 
 class WebShortcutsAdapter(
     private val favicons: FaviconRepository,
@@ -50,7 +51,7 @@ class WebShortcutsAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(shortcut: WebShortcut) {
             binding.shortcutLabel.text = shortcut.name
-            binding.shortcutAddress.text = shortcut.url
+            binding.shortcutAddress.text = WebShortcutPolicy.displayUrl(shortcut.url)
             binding.root.contentDescription = shortcut.name
             val icon = favicons.load(shortcut.faviconFileName)
             binding.shortcutIcon.scaleType = if (icon == null) {

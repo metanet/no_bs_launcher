@@ -88,4 +88,18 @@ object WebShortcutPolicy {
         }
         return ShortcutInput.Valid(normalizedName, normalizedUrl)
     }
+
+    fun displayUrl(url: String): String {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return url
+        val host = uri.host ?: return url
+        val authority = buildString {
+            if (':' in host) append('[').append(host).append(']') else append(host)
+            if (uri.port >= 0) append(':').append(uri.port)
+        }
+        return buildString {
+            append(uri.scheme).append("://").append(authority).append(uri.rawPath.orEmpty())
+            if (uri.rawQuery != null) append("?…")
+            if (uri.rawFragment != null) append("#…")
+        }
+    }
 }

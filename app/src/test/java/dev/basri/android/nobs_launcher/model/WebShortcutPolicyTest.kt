@@ -91,6 +91,20 @@ class WebShortcutPolicyTest {
         assertEquals(false, HomeItemId.isValid("not-an-item"))
     }
 
+    @Test
+    fun displayUrlHidesQueryValuesAndFragments() {
+        assertEquals(
+            "https://example.com/private/path?…#…",
+            WebShortcutPolicy.displayUrl(
+                "https://example.com/private/path?access_token=secret#account",
+            ),
+        )
+        assertEquals(
+            "http://192.168.1.20:8080/status",
+            WebShortcutPolicy.displayUrl("http://192.168.1.20:8080/status"),
+        )
+    }
+
     private companion object {
         const val UUID = "123e4567-e89b-12d3-a456-426614174000"
     }
