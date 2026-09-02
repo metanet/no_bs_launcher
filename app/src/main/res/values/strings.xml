@@ -44,6 +44,8 @@
     <string name="shortcut_url_required">Enter a web address</string>
     <string name="shortcut_url_too_long">The web address is too long</string>
     <string name="shortcut_url_invalid">Use a valid HTTP or HTTPS web address</string>
+    <string name="checking_website">Checking website…</string>
+    <string name="shortcut_website_inaccessible">Website is not accessible.</string>
     <string name="confirm_remove_shortcut">Remove %1$s from the launcher?</string>
     <string name="shortcut_save_failed">Unable to save shortcut</string>
     <string name="shortcut_remove_failed">Unable to remove shortcut</string>

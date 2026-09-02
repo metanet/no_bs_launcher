@@ -4,6 +4,7 @@
     <dimen name="panel_gap">32dp</dimen>
     <dimen name="tile_gap">12dp</dimen>
     <dimen name="app_column_edge_inset">18dp</dimen>
+    <dimen name="app_artwork_vertical_inset">18dp</dimen>
     <dimen name="tile_corner">14dp</dimen>
     <dimen name="focus_stroke">3dp</dimen>
     <dimen name="clock_size">54sp</dimen>

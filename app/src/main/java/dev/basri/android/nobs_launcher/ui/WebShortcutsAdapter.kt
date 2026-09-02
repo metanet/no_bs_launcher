@@ -1,7 +1,9 @@
 package dev.basri.android.nobs_launcher.ui
 
+import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
@@ -19,6 +21,7 @@ class WebShortcutsAdapter(
         setHasStableIds(true)
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     fun submit(shortcuts: List<WebShortcut>) {
         this.shortcuts.clear()
         this.shortcuts.addAll(shortcuts.sortedBy { it.name.lowercase() })
@@ -50,6 +53,11 @@ class WebShortcutsAdapter(
             binding.shortcutAddress.text = shortcut.url
             binding.root.contentDescription = shortcut.name
             val icon = favicons.load(shortcut.faviconFileName)
+            binding.shortcutIcon.scaleType = if (icon == null) {
+                ImageView.ScaleType.CENTER_INSIDE
+            } else {
+                ImageView.ScaleType.FIT_CENTER
+            }
             binding.shortcutIcon.setImageDrawable(icon)
             if (icon == null) binding.shortcutIcon.setImageResource(R.drawable.ic_web_shortcut)
             binding.shortcutEdit.setOnClickListener { onEdit(shortcut) }

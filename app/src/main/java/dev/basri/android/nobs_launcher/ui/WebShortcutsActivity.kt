@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.data.LayoutStore
+import dev.basri.android.nobs_launcher.data.SaveShortcutRequest
 import dev.basri.android.nobs_launcher.data.SaveShortcutResult
 import dev.basri.android.nobs_launcher.data.WebShortcutService
 import dev.basri.android.nobs_launcher.databinding.ActivityWebShortcutsBinding
@@ -24,6 +25,7 @@ class WebShortcutsActivity : Activity() {
     private lateinit var store: LayoutStore
     private lateinit var adapter: WebShortcutsAdapter
     private lateinit var service: WebShortcutService
+    private var activeSaveRequest: SaveShortcutRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +67,12 @@ class WebShortcutsActivity : Activity() {
         if (hasFocus) enterImmersiveMode()
     }
 
+    override fun onDestroy() {
+        activeSaveRequest?.cancel()
+        activeSaveRequest = null
+        super.onDestroy()
+    }
+
     private fun refresh() {
         val shortcuts = store.load().shortcuts
         adapter.submit(shortcuts)
@@ -87,33 +95,80 @@ class WebShortcutsActivity : Activity() {
             .create()
         dialog.show()
         val positiveButton = dialog.getButton(DialogInterface.BUTTON_POSITIVE)
+        var saveInProgress = false
+        dialog.setOnDismissListener {
+            saveInProgress = false
+            activeSaveRequest?.cancel()
+            activeSaveRequest = null
+        }
         positiveButton.setOnClickListener {
+            if (saveInProgress) return@setOnClickListener
             editor.shortcutName.error = null
             editor.shortcutUrl.error = null
-            val result = service.save(
+            saveInProgress = true
+            setEditorChecking(editor, positiveButton, checking = true)
+            activeSaveRequest = service.save(
                 existingUuid = shortcut?.uuid,
                 name = editor.shortcutName.text.toString(),
                 url = editor.shortcutUrl.text.toString(),
                 onIconUpdated = {
-                    runOnUiThread {
+                    binding.root.post {
                         if (!isFinishing && !isDestroyed) refresh()
                     }
                 },
-            )
-            when (result) {
-                is SaveShortcutResult.Invalid -> showValidationError(editor, result.validation)
-                SaveShortcutResult.SaveFailed -> Toast.makeText(
-                    this,
-                    R.string.shortcut_save_failed,
-                    Toast.LENGTH_SHORT,
-                ).show()
-                is SaveShortcutResult.Saved -> {
-                    refresh()
-                    dialog.dismiss()
+                onComplete = { result ->
+                    editor.root.post {
+                        if (
+                            !dialog.isShowing ||
+                            isFinishing ||
+                            isDestroyed ||
+                            !saveInProgress
+                        ) {
+                            return@post
+                        }
+                        activeSaveRequest = null
+                        saveInProgress = false
+                        when (result) {
+                            is SaveShortcutResult.Invalid -> {
+                                setEditorChecking(editor, positiveButton, checking = false)
+                                showValidationError(editor, result.validation)
+                            }
+                            SaveShortcutResult.WebsiteInaccessible -> {
+                                setEditorChecking(editor, positiveButton, checking = false)
+                                editor.shortcutUrl.error = getString(
+                                    R.string.shortcut_website_inaccessible,
+                                )
+                                editor.shortcutUrl.requestFocus()
+                            }
+                            SaveShortcutResult.SaveFailed -> {
+                                setEditorChecking(editor, positiveButton, checking = false)
+                                Toast.makeText(
+                                    this,
+                                    R.string.shortcut_save_failed,
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                            is SaveShortcutResult.Saved -> {
+                                refresh()
+                                dialog.dismiss()
+                            }
+                        }
+                    }
                 }
-            }
+            )
         }
         editor.shortcutName.requestFocus()
+    }
+
+    private fun setEditorChecking(
+        editor: DialogWebShortcutBinding,
+        positiveButton: View,
+        checking: Boolean,
+    ) {
+        editor.shortcutName.isEnabled = !checking
+        editor.shortcutUrl.isEnabled = !checking
+        positiveButton.isEnabled = !checking
+        editor.shortcutChecking.visibility = if (checking) View.VISIBLE else View.GONE
     }
 
     private fun showValidationError(

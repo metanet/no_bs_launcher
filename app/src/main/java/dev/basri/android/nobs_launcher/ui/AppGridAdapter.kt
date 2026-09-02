@@ -1,7 +1,9 @@
 package dev.basri.android.nobs_launcher.ui
 
+import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
@@ -30,6 +32,7 @@ class AppGridAdapter(
         setHasStableIds(true)
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     fun submitSections(
         favorites: List<HomeItem>,
         remaining: List<HomeItem>,
@@ -115,6 +118,7 @@ class AppGridAdapter(
             binding.appLabel.text = item.label
             when (item) {
                 is HomeItem.App -> {
+                    binding.appArtwork.scaleType = ImageView.ScaleType.CENTER_INSIDE
                     binding.appArtwork.setImageDrawable(item.candidate.artwork)
                     if (item.candidate.artwork == null) {
                         binding.appArtwork.setImageResource(R.drawable.ic_launcher_foreground)
@@ -122,6 +126,11 @@ class AppGridAdapter(
                 }
                 is HomeItem.Web -> {
                     val favicon = favicons.load(item.shortcut.faviconFileName)
+                    binding.appArtwork.scaleType = if (favicon == null) {
+                        ImageView.ScaleType.CENTER_INSIDE
+                    } else {
+                        ImageView.ScaleType.FIT_CENTER
+                    }
                     binding.appArtwork.setImageDrawable(favicon)
                     if (favicon == null) {
                         binding.appArtwork.setImageResource(R.drawable.ic_web_shortcut)

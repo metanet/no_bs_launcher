@@ -14,15 +14,29 @@ import kotlin.math.roundToInt
 
 class FaviconRepository(
     context: Context,
-    private val fetcher: FaviconHttpFetcher = FaviconHttpFetcher(),
+    private val fetcher: FaviconBytesFetcher = FaviconHttpFetcher(),
     private val executor: Executor = Executors.newSingleThreadExecutor(),
 ) : FaviconGateway {
     private val directory = File(context.applicationContext.filesDir, DIRECTORY_NAME)
 
-    override fun fetchAndStore(shortcut: WebShortcut, onComplete: (String?) -> Unit) {
+    /**
+     * Fetches and stores on [executor], then invokes [onComplete] exactly once on that same
+     * executor thread. Candidate-fetch or image-processing exceptions complete with `null`.
+     */
+    override fun fetchAndStore(
+        shortcut: WebShortcut,
+        candidates: List<String>,
+        onComplete: (String?) -> Unit,
+    ) {
         executor.execute {
-            val fileName = fetcher.fetch(shortcut.url)
-                ?.let { bytes -> store(shortcut.uuid, shortcut.url, bytes) }
+            val fileName = try {
+                candidates.firstNotNullOfOrNull { candidate ->
+                    fetcher.fetch(candidate)
+                        ?.let { bytes -> store(shortcut.uuid, shortcut.url, bytes) }
+                }
+            } catch (_: Exception) {
+                null
+            }
             onComplete(fileName)
         }
     }

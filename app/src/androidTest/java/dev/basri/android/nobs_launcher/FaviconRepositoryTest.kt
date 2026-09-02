@@ -4,13 +4,17 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.basri.android.nobs_launcher.data.FaviconBytesFetcher
 import dev.basri.android.nobs_launcher.data.FaviconRepository
+import dev.basri.android.nobs_launcher.model.WebShortcut
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.Executor
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -85,7 +89,75 @@ class FaviconRepositoryTest {
         assertFalse(temporaryFile.exists())
     }
 
+    @Test
+    fun fetchesCandidatesInOrderUntilOneDecodesThenStoresAndDeletesIt() {
+        val validSource = Bitmap.createBitmap(512, 128, Bitmap.Config.ARGB_8888)
+        val validBytes = ByteArrayOutputStream().use { output ->
+            validSource.compress(Bitmap.CompressFormat.PNG, 100, output)
+            output.toByteArray()
+        }
+        validSource.recycle()
+        val requested = mutableListOf<String>()
+        val fetcher = FaviconBytesFetcher { candidate ->
+            requested += candidate
+            when (candidate) {
+                INVALID_CANDIDATE -> byteArrayOf(1, 2, 3)
+                VALID_CANDIDATE -> validBytes
+                else -> error("repository fetched past the first decodable candidate")
+            }
+        }
+        val candidateRepository = FaviconRepository(
+            context = context,
+            fetcher = fetcher,
+            executor = Executor(Runnable::run),
+        )
+        val shortcut = WebShortcut(UUID, "Example", "https://example.com/page")
+        var storedFileName: String? = null
+
+        candidateRepository.fetchAndStore(
+            shortcut,
+            listOf(INVALID_CANDIDATE, VALID_CANDIDATE, NEVER_REQUESTED_CANDIDATE),
+        ) { storedFileName = it }
+
+        assertEquals(listOf(INVALID_CANDIDATE, VALID_CANDIDATE), requested)
+        val fileName = checkNotNull(storedFileName)
+        val directory = File(context.filesDir, FaviconRepository.DIRECTORY_NAME)
+        val storedFile = File(directory, fileName)
+        val stored = checkNotNull(BitmapFactory.decodeFile(storedFile.absolutePath))
+        assertEquals(256, stored.width)
+        assertEquals(64, stored.height)
+        stored.recycle()
+
+        candidateRepository.delete(fileName)
+
+        assertFalse(storedFile.exists())
+        assertFalse(File(directory, "$fileName.tmp").exists())
+    }
+
+    @Test
+    fun exceptionalFetcherCompletesExactlyOnceWithNull() {
+        val candidateRepository = FaviconRepository(
+            context = context,
+            fetcher = FaviconBytesFetcher { throw IllegalStateException("broken decoder input") },
+            executor = Executor(Runnable::run),
+        )
+        val shortcut = WebShortcut(UUID, "Example", "https://example.com/page")
+        var completionCount = 0
+        var completion: String? = "not-completed"
+
+        candidateRepository.fetchAndStore(shortcut, listOf(VALID_CANDIDATE)) { fileName ->
+            completionCount += 1
+            completion = fileName
+        }
+
+        assertEquals(1, completionCount)
+        assertNull(completion)
+    }
+
     private companion object {
         const val UUID = "11111111-1111-4111-8111-111111111111"
+        const val INVALID_CANDIDATE = "https://example.com/invalid.svg"
+        const val VALID_CANDIDATE = "https://example.com/icon.png"
+        const val NEVER_REQUESTED_CANDIDATE = "https://example.com/favicon.ico"
     }
 }

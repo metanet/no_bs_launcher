@@ -21,6 +21,7 @@ import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
 import androidx.test.espresso.matcher.ViewMatchers.hasErrorText
 import androidx.test.espresso.matcher.ViewMatchers.hasFocus
 import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
+import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
@@ -33,13 +34,18 @@ import android.app.Activity
 import android.app.Instrumentation
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Rect
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.RecyclerView
 import dev.basri.android.nobs_launcher.data.AppCandidate
 import dev.basri.android.nobs_launcher.data.AppCatalog
+import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.HomeAppSectionsPolicy
@@ -57,7 +63,13 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import android.os.SystemClock
 
 @RunWith(AndroidJUnit4::class)
@@ -183,32 +195,40 @@ class HomeAndSettingsFlowTest {
                 matches(hasErrorText(context.getString(R.string.shortcut_url_invalid))),
             )
 
-            onView(withId(R.id.shortcut_url)).perform(
-                replaceText("http://127.0.0.1:9/first"),
-            )
-            closeSoftKeyboard()
-            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            lateinit var createdUrl: String
+            LoopbackHttpServer().use { server ->
+                server.releaseResponse()
+                createdUrl = "${server.url}/first"
+                onView(withId(R.id.shortcut_url)).perform(replaceText(createdUrl))
+                closeSoftKeyboard()
+                onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+                waitUntil { LayoutStore(context).load().shortcuts.size == 1 }
+            }
             onView(withContentDescription("Basri's site")).check(matches(isDisplayed()))
-            onView(withText("http://127.0.0.1:9/first")).check(matches(isDisplayed()))
 
             val created = LayoutStore(context).load().shortcuts.single()
+            assertEquals(createdUrl, created.url)
             val favoriteConfig = LayoutStore(context).load().copy(
                 favoriteItemIds = listOf(HomeItemId.web(created.uuid)),
             )
             assertTrue(LayoutStore(context).save(favoriteConfig))
 
             onView(withId(R.id.shortcut_edit)).perform(click())
-            onView(withId(R.id.shortcut_name)).perform(replaceText("Edited site"))
-            onView(withId(R.id.shortcut_url)).perform(
-                replaceText("http://127.0.0.1:9/second"),
-            )
-            closeSoftKeyboard()
-            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            lateinit var editedUrl: String
+            LoopbackHttpServer().use { server ->
+                server.releaseResponse()
+                editedUrl = "${server.url}/second"
+                onView(withId(R.id.shortcut_name)).perform(replaceText("Edited site"))
+                onView(withId(R.id.shortcut_url)).perform(replaceText(editedUrl))
+                closeSoftKeyboard()
+                onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+                waitUntil { LayoutStore(context).load().shortcuts.single().name == "Edited site" }
+            }
 
             val edited = LayoutStore(context).load().shortcuts.single()
             assertEquals(created.uuid, edited.uuid)
             assertEquals("Edited site", edited.name)
-            assertEquals("http://127.0.0.1:9/second", edited.url)
+            assertEquals(editedUrl, edited.url)
             assertEquals(listOf(HomeItemId.web(created.uuid)), LayoutStore(context).load().favoriteItemIds)
 
             onView(withId(R.id.shortcut_remove)).perform(click())
@@ -228,6 +248,154 @@ class HomeAndSettingsFlowTest {
 
             onView(withId(R.id.back_to_settings)).perform(click())
             onView(withId(R.id.web_shortcuts)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun shortcutEditorShowsCheckingStateThenPersistsReachableWebsite() {
+        LayoutStore(context).save(completedConfig())
+
+        LoopbackHttpServer().use { server ->
+            ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+                onView(withId(R.id.add_shortcut)).perform(click())
+                onView(withText(context.getString(R.string.checking_website)))
+                    .check(matches(withEffectiveVisibility(GONE)))
+                    .check { view, noViewException ->
+                        noViewException?.let { throw it }
+                        assertEquals(
+                            View.ACCESSIBILITY_LIVE_REGION_POLITE,
+                            view.accessibilityLiveRegion,
+                        )
+                    }
+                onView(withId(R.id.shortcut_name)).perform(replaceText("Delayed website"))
+                onView(withId(R.id.shortcut_url)).perform(replaceText("  ${server.url}  "))
+                closeSoftKeyboard()
+                onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+
+                onView(withText(context.getString(R.string.checking_website)))
+                    .check(matches(isDisplayed()))
+                onView(withId(R.id.shortcut_name)).check(matches(not(isEnabled())))
+                onView(withId(R.id.shortcut_url)).check(matches(not(isEnabled())))
+                onView(withId(android.R.id.button1)).inRoot(isDialog())
+                    .check(matches(not(isEnabled())))
+                onView(withId(android.R.id.button2)).inRoot(isDialog())
+                    .check(matches(isEnabled()))
+                server.awaitRequest()
+
+                server.releaseResponse()
+                waitUntil { LayoutStore(context).load().shortcuts.size == 1 }
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+
+                onView(withId(R.id.shortcut_name)).check(doesNotExist())
+                val saved = LayoutStore(context).load().shortcuts.single()
+                assertEquals("Delayed website", saved.name)
+                assertEquals(server.url, saved.url)
+            }
+        }
+    }
+
+    @Test
+    fun inaccessibleWebsiteKeepsEditorOpenAndDoesNotPersist() {
+        LayoutStore(context).save(completedConfig())
+
+        LoopbackHttpServer(responseStatus = "500 Internal Server Error").use { server ->
+            server.releaseResponse()
+            ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+                onView(withId(R.id.add_shortcut)).perform(click())
+                onView(withId(R.id.shortcut_name)).perform(replaceText("Unavailable website"))
+                onView(withId(R.id.shortcut_url)).perform(replaceText("${server.url}/unreachable"))
+                closeSoftKeyboard()
+                onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+
+                val expectedError = context.getString(R.string.shortcut_website_inaccessible)
+                waitForView {
+                    onView(withId(R.id.shortcut_url)).check(matches(hasErrorText(expectedError)))
+                }
+                onView(withId(R.id.shortcut_url)).check(matches(hasFocus()))
+                onView(withId(R.id.shortcut_name)).check(matches(isEnabled()))
+                onView(withId(R.id.shortcut_url)).check(matches(isEnabled()))
+                onView(withId(android.R.id.button1)).inRoot(isDialog()).check(matches(isEnabled()))
+                onView(withId(android.R.id.button2)).inRoot(isDialog()).check(matches(isEnabled()))
+                assertEquals(emptyList<WebShortcut>(), LayoutStore(context).load().shortcuts)
+            }
+        }
+    }
+
+    @Test
+    fun inaccessibleEditPreservesMetadataIconAndFavorite() {
+        val original = webShortcut(
+            name = "Existing website",
+            url = "https://old.example/path",
+            icon = "test-inaccessible-edit.png",
+        )
+        val originalConfig = completedConfig().copy(
+            favoriteItemIds = listOf(original.itemId),
+            shortcuts = listOf(original),
+        )
+        val iconDirectory = java.io.File(
+            context.filesDir,
+            dev.basri.android.nobs_launcher.data.FaviconRepository.DIRECTORY_NAME,
+        ).apply { mkdirs() }
+        val iconFile = java.io.File(iconDirectory, checkNotNull(original.faviconFileName))
+        assertTrue(iconFile.createNewFile() || iconFile.isFile)
+        assertTrue(LayoutStore(context).save(originalConfig))
+
+        try {
+            LoopbackHttpServer(responseStatus = "500 Internal Server Error").use { server ->
+                server.releaseResponse()
+                ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+                    onView(withId(R.id.shortcut_edit)).perform(click())
+                    onView(withId(R.id.shortcut_name)).perform(replaceText("Rejected edit"))
+                    onView(withId(R.id.shortcut_url)).perform(replaceText("${server.url}/edit"))
+                    closeSoftKeyboard()
+                    onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+
+                    val expectedError = context.getString(R.string.shortcut_website_inaccessible)
+                    waitForView {
+                        onView(withId(R.id.shortcut_url)).check(matches(hasErrorText(expectedError)))
+                    }
+                    assertEquals(originalConfig, LayoutStore(context).load())
+                    assertTrue(iconFile.isFile)
+                }
+            }
+        } finally {
+            iconFile.delete()
+        }
+    }
+
+    @Test
+    fun closingEditorDuringWebsiteCheckPreventsLatePersistence() {
+        LayoutStore(context).save(completedConfig())
+
+        LoopbackHttpServer().use { server ->
+            ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+                onView(withId(R.id.add_shortcut)).perform(click())
+                onView(withId(R.id.shortcut_name)).perform(replaceText("Cancelled website"))
+                onView(withId(R.id.shortcut_url)).perform(replaceText(server.url))
+                closeSoftKeyboard()
+                onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+                server.awaitRequest()
+
+                onView(withId(android.R.id.button2)).inRoot(isDialog()).perform(click())
+                onView(withId(R.id.shortcut_name)).check(doesNotExist())
+                server.releaseResponse()
+                server.awaitFinished()
+
+                LoopbackHttpServer().use { barrierServer ->
+                    onView(withId(R.id.add_shortcut)).perform(click())
+                    onView(withId(R.id.shortcut_name)).perform(replaceText("Barrier website"))
+                    onView(withId(R.id.shortcut_url)).perform(replaceText(barrierServer.url))
+                    closeSoftKeyboard()
+                    onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+
+                    barrierServer.awaitRequest()
+                    assertEquals(emptyList<WebShortcut>(), LayoutStore(context).load().shortcuts)
+
+                    onView(withId(android.R.id.button2)).inRoot(isDialog()).perform(click())
+                    barrierServer.releaseResponse()
+                    barrierServer.awaitFinished()
+                }
+            }
         }
     }
 
@@ -508,6 +676,79 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun downloadedSmallFaviconMatchesLandscapeAppArtworkHeight() {
+        val app = landscapeCatalogApp()
+        val shortcut = webShortcut(name = "A Tiny Home icon")
+        val favicon = storeTinyFavicon(shortcut)
+        LayoutStore(context).save(
+            completedConfig().copy(
+                favoriteItemIds = listOf(shortcut.itemId, HomeItemId.app(app.packageName)),
+                shortcuts = listOf(shortcut.copy(faviconFileName = favicon)),
+            ),
+        )
+
+        try {
+            ActivityScenario.launch(HomeActivity::class.java).use {
+                var faviconHeight = 0f
+                onView(
+                    allOf(
+                        withId(R.id.app_artwork),
+                        isDescendantOfA(withContentDescription(shortcut.name)),
+                    ),
+                ).check { view, error ->
+                    error?.let { throw it }
+                    faviconHeight = renderedArtworkHeight(view)
+                }
+                var appHeight = 0f
+                onView(
+                    allOf(
+                        withId(R.id.app_artwork),
+                        isDescendantOfA(withContentDescription(app.label)),
+                    ),
+                ).check { view, error ->
+                    error?.let { throw it }
+                    appHeight = renderedArtworkHeight(view)
+                }
+                assertEquals(
+                    "Favicon height must align with ${app.label} artwork",
+                    appHeight,
+                    faviconHeight,
+                    2f,
+                )
+            }
+        } finally {
+            FaviconRepository(context).delete(favicon)
+        }
+    }
+
+    @Test
+    fun downloadedSmallFaviconFillsManagementArtworkViewport() {
+        val shortcut = webShortcut(name = "Tiny management icon")
+        val favicon = storeTinyFavicon(shortcut)
+        LayoutStore(context).save(
+            completedConfig().copy(
+                shortcuts = listOf(shortcut.copy(faviconFileName = favicon)),
+            ),
+        )
+
+        try {
+            ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+                onView(
+                    allOf(
+                        withId(R.id.shortcut_icon),
+                        isDescendantOfA(withContentDescription(shortcut.name)),
+                    ),
+                ).check { view, error ->
+                    error?.let { throw it }
+                    assertArtworkFillsShorterAxis(view)
+                }
+            }
+        } finally {
+            FaviconRepository(context).delete(favicon)
+        }
+    }
+
+    @Test
     fun shortcutMenusManageFavoritesAndOpenTheExistingEditor() {
         val shortcut = webShortcut(name = "Editable web")
         LayoutStore(context).save(completedConfig().copy(shortcuts = listOf(shortcut)))
@@ -716,6 +957,17 @@ class HomeAndSettingsFlowTest {
         return unique.take(count)
     }
 
+    private fun landscapeCatalogApp(): AppCandidate = AppCatalog(context).loadApps()
+        .groupBy { it.label.lowercase() }
+        .values
+        .filter { it.size == 1 }
+        .map(List<AppCandidate>::single)
+        .first { candidate ->
+            val artwork = candidate.artwork ?: return@first false
+            val ratio = artwork.intrinsicWidth.toFloat() / artwork.intrinsicHeight.toFloat()
+            artwork.intrinsicWidth >= 200 && ratio in 1.7f..1.85f
+        }
+
     private fun completedConfig(selectedPackages: List<String> = emptyList()) = LauncherConfig(
         firstRunComplete = true,
         wifiLabel = "",
@@ -733,6 +985,163 @@ class HomeAndSettingsFlowTest {
         url = url,
         faviconFileName = icon,
     )
+
+    private fun storeTinyFavicon(shortcut: WebShortcut): String {
+        val source = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.MAGENTA)
+        }
+        val bytes = ByteArrayOutputStream().use { output ->
+            check(source.compress(Bitmap.CompressFormat.PNG, 100, output))
+            output.toByteArray()
+        }
+        source.recycle()
+        return checkNotNull(FaviconRepository(context).store(shortcut.uuid, shortcut.url, bytes))
+    }
+
+    private fun assertArtworkFillsShorterAxis(view: View) {
+        val image = view as ImageView
+        val renderedWidth = renderedArtworkWidth(image)
+        val renderedHeight = renderedArtworkHeight(image)
+        val requiredExtent = minOf(image.width, image.height) * 0.9f
+        assertTrue(
+            "Rendered favicon ${renderedWidth}x$renderedHeight did not fill " +
+                "the ${image.width}x${image.height} icon viewport",
+            maxOf(renderedWidth, renderedHeight) >= requiredExtent,
+        )
+    }
+
+    private fun renderedArtworkWidth(view: View): Float {
+        val image = view as ImageView
+        val drawable = checkNotNull(image.drawable)
+        val matrixValues = FloatArray(9)
+        image.imageMatrix.getValues(matrixValues)
+        return drawable.intrinsicWidth * matrixValues[Matrix.MSCALE_X]
+    }
+
+    private fun renderedArtworkHeight(view: View): Float {
+        val image = view as ImageView
+        val drawable = checkNotNull(image.drawable)
+        val matrixValues = FloatArray(9)
+        image.imageMatrix.getValues(matrixValues)
+        return drawable.intrinsicHeight * matrixValues[Matrix.MSCALE_Y]
+    }
+
+    private fun waitUntil(
+        timeoutMillis: Long = 5_000,
+        condition: () -> Boolean,
+    ) {
+        val deadline = SystemClock.uptimeMillis() + timeoutMillis
+        while (!condition()) {
+            check(SystemClock.uptimeMillis() < deadline) { "Condition was not met within $timeoutMillis ms" }
+            SystemClock.sleep(25)
+        }
+    }
+
+    private fun waitForView(
+        timeoutMillis: Long = 5_000,
+        assertion: () -> Unit,
+    ) {
+        val deadline = SystemClock.uptimeMillis() + timeoutMillis
+        var lastFailure: Throwable? = null
+        while (SystemClock.uptimeMillis() < deadline) {
+            try {
+                assertion()
+                return
+            } catch (error: AssertionError) {
+                lastFailure = error
+            } catch (error: RuntimeException) {
+                lastFailure = error
+            }
+            SystemClock.sleep(25)
+        }
+        throw AssertionError("View condition was not met within $timeoutMillis ms", lastFailure)
+    }
+
+    private class LoopbackHttpServer(
+        private val responseStatus: String = "204 No Content",
+    ) : AutoCloseable {
+        private val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        private val requestReceived = CountDownLatch(1)
+        private val responseReleased = CountDownLatch(1)
+        private val finished = CountDownLatch(1)
+
+        @Volatile
+        private var failure: Throwable? = null
+
+        val url = "http://127.0.0.1:${server.localPort}"
+
+        init {
+            Thread(
+                {
+                    try {
+                        server.accept().use { socket ->
+                            socket.soTimeout = 3_000
+                            val input = socket.getInputStream()
+                            var bytesRead = 0
+                            var terminatorBytes = 0
+                            while (bytesRead < MAX_REQUEST_BYTES && terminatorBytes < 4) {
+                                val next = input.read()
+                                if (next == -1) break
+                                bytesRead += 1
+                                terminatorBytes = when {
+                                    terminatorBytes == 0 && next == '\r'.code -> 1
+                                    terminatorBytes == 1 && next == '\n'.code -> 2
+                                    terminatorBytes == 2 && next == '\r'.code -> 3
+                                    terminatorBytes == 3 && next == '\n'.code -> 4
+                                    next == '\r'.code -> 1
+                                    else -> 0
+                                }
+                            }
+                            check(terminatorBytes == 4) { "Loopback request headers were incomplete" }
+                            requestReceived.countDown()
+                            check(responseReleased.await(5, TimeUnit.SECONDS)) {
+                                "Loopback response was not released"
+                            }
+                            val response = "HTTP/1.1 $responseStatus\r\nConnection: close\r\n\r\n"
+                            socket.getOutputStream().apply {
+                                write(response.toByteArray(StandardCharsets.US_ASCII))
+                                flush()
+                            }
+                        }
+                    } catch (error: Throwable) {
+                        if (!server.isClosed) failure = error
+                        requestReceived.countDown()
+                    } finally {
+                        finished.countDown()
+                    }
+                },
+                "shortcut-test-loopback",
+            ).apply {
+                isDaemon = true
+                start()
+            }
+        }
+
+        fun awaitRequest() {
+            check(requestReceived.await(5, TimeUnit.SECONDS)) { "Website probe never reached loopback" }
+            failure?.let { throw AssertionError("Loopback server failed", it) }
+        }
+
+        fun releaseResponse() {
+            responseReleased.countDown()
+        }
+
+        fun awaitFinished() {
+            check(finished.await(5, TimeUnit.SECONDS)) { "Loopback server did not finish" }
+            failure?.let { throw AssertionError("Loopback server failed", it) }
+        }
+
+        override fun close() {
+            responseReleased.countDown()
+            server.close()
+            check(finished.await(5, TimeUnit.SECONDS)) { "Loopback server did not stop" }
+            failure?.let { throw AssertionError("Loopback server failed", it) }
+        }
+
+        private companion object {
+            const val MAX_REQUEST_BYTES = 8 * 1024
+        }
+    }
 
     private fun <A : Activity> ActivityScenario<A>.pressActivityKey(keyCode: Int) {
         onActivity { activity ->

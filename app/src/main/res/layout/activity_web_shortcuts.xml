@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/background_gradient"
@@ -46,7 +47,8 @@
             android:paddingHorizontal="24dp"
             android:text="@string/add_shortcut"
             android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
+            android:textColor="@color/text_primary"
+            tools:ignore="ButtonStyle" />
 
         <Button
             android:id="@+id/back_to_settings"
@@ -57,6 +59,7 @@
             android:paddingHorizontal="24dp"
             android:text="@string/back"
             android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
+            android:textColor="@color/text_primary"
+            tools:ignore="ButtonStyle" />
     </LinearLayout>
 </LinearLayout>
