@@ -1,7 +1,6 @@
 package dev.basri.android.nobs_launcher.data
 
 import java.net.SocketTimeoutException
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import okhttp3.Authenticator
 import okhttp3.Call
@@ -10,8 +9,6 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.ResponseBody
-import okio.Buffer
 
 sealed interface WebsiteProbeResult {
     data class Reachable(val finalUrl: String, val html: String?) : WebsiteProbeResult
@@ -52,7 +49,7 @@ class WebsiteHttpClient(
             try {
                 val request = Request.Builder()
                     .url(currentUrl)
-                    .get()
+                    .head()
                     .header("Accept", ACCEPT_HEADER)
                     .header("User-Agent", USER_AGENT)
                     .build()
@@ -76,13 +73,7 @@ class WebsiteHttpClient(
                     }
                     if (response.code !in 200..299) return WebsiteProbeResult.Inaccessible
 
-                    val body = response.body
-                    val html = if (body.contentType().isHtml()) {
-                        readHtmlPrefix(body, startedAtMillis)
-                    } else {
-                        null
-                    }
-                    return WebsiteProbeResult.Reachable(currentUrl.toString(), html)
+                    return WebsiteProbeResult.Reachable(currentUrl.toString(), null)
                 }
                 currentUrl = nextUrl ?: return WebsiteProbeResult.Inaccessible
                 redirects += 1
@@ -90,21 +81,6 @@ class WebsiteHttpClient(
                 return WebsiteProbeResult.Inaccessible
             }
         }
-    }
-
-    private fun readHtmlPrefix(body: ResponseBody, startedAtMillis: Long): String {
-        val output = Buffer()
-        val source = body.source()
-        var remainingBytes = MAX_HTML_BYTES.toLong()
-        while (remainingBytes > 0L) {
-            remainingTimeoutMillis(startedAtMillis)
-            val read = source.read(output, minOf(BUFFER_SIZE.toLong(), remainingBytes))
-            remainingTimeoutMillis(startedAtMillis)
-            if (read < 0L) break
-            if (read == 0L) continue
-            remainingBytes -= read
-        }
-        return output.readString(Charsets.UTF_8)
     }
 
     private fun remainingTimeoutMillis(startedAtMillis: Long): Long {
@@ -118,17 +94,9 @@ class WebsiteHttpClient(
         return remainingMillis
     }
 
-    private fun okhttp3.MediaType?.isHtml(): Boolean {
-        val mediaType = this ?: return false
-        val value = "${mediaType.type}/${mediaType.subtype}".lowercase(Locale.ROOT)
-        return value == "text/html" || value == "application/xhtml+xml"
-    }
-
     private companion object {
-        const val MAX_HTML_BYTES = 256 * 1024
         const val MAX_REDIRECTS = 5
         const val NANOS_PER_MILLISECOND = 1_000_000L
-        const val BUFFER_SIZE = 8 * 1024
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403
         const val ACCEPT_HEADER = "text/html, application/xhtml+xml"

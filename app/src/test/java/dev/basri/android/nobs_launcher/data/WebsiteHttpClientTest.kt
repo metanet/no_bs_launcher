@@ -138,7 +138,7 @@ class WebsiteHttpClientTest {
     }
 
     @Test
-    fun sendsBoundedGetHeadersWithoutCookieOrAuthorization() {
+    fun sendsSideEffectFreeHeadHeadersWithoutCookieOrAuthorization() {
         val factory = FakeCallFactory { request, _ ->
             response(request, 200, TrackingResponseBody("", "application/json"))
         }
@@ -146,7 +146,7 @@ class WebsiteHttpClientTest {
         WebsiteHttpClient(callFactory = factory).probe(START_URL)
 
         val request = factory.calls.single().request()
-        assertEquals("GET", request.method)
+        assertEquals("HEAD", request.method)
         assertEquals("text/html, application/xhtml+xml", request.header("Accept"))
         assertEquals("NoBullshitLauncher/0.4.1", request.header("User-Agent"))
         assertNull(request.header("Cookie"))
@@ -183,13 +183,13 @@ class WebsiteHttpClientTest {
     }
 
     @Test
-    fun readsHtmlAndXhtmlAsUtf8AndClosesTheirBodies() {
+    fun headProbeNeverConsumesHtmlResponseBodies() {
         listOf("text/html; charset=utf-8", "application/xhtml+xml").forEach { contentType ->
             val body = TrackingResponseBody("café ☕", contentType)
             val factory = FakeCallFactory { request, _ -> response(request, 200, body) }
 
             assertEquals(
-                WebsiteProbeResult.Reachable(START_URL, "café ☕"),
+                WebsiteProbeResult.Reachable(START_URL, null),
                 WebsiteHttpClient(callFactory = factory).probe(START_URL),
             )
             assertTrue(body.closed)
@@ -197,7 +197,7 @@ class WebsiteHttpClientTest {
     }
 
     @Test
-    fun truncatesDeclaredAndStreamedOversizeHtmlWithoutReadingTheSuffix() {
+    fun headProbeDoesNotConsumeOversizedResponseBodies() {
         val prefix = ByteArray(MAX_HTML_BYTES) { ('a'.code + it % 26).toByte() }
         val oversized = prefix + "ignored suffix".toByteArray()
 
@@ -206,10 +206,10 @@ class WebsiteHttpClientTest {
             val factory = FakeCallFactory { request, _ -> response(request, 200, body) }
 
             assertEquals(
-                WebsiteProbeResult.Reachable(START_URL, prefix.toString(Charsets.UTF_8)),
+                WebsiteProbeResult.Reachable(START_URL, null),
                 WebsiteHttpClient(callFactory = factory).probe(START_URL),
             )
-            assertEquals(MAX_HTML_BYTES.toLong(), body.bytesRead)
+            assertEquals(0L, body.bytesRead)
             assertTrue(body.closed)
         }
     }
