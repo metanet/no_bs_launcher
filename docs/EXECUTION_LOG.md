@@ -371,3 +371,10 @@
   contain no launcher fatal exception or ANR. All three explicit shell UI-dump
   artifacts were removed. Commit the verified source next; power-off remains
   the only device action after that commit.
+- Succeeded: committed the verified implementation as `501d82e` (`Add
+  first-class web shortcuts`) with a clean worktree. Immediately before the
+  final device action, `dumpsys power` reported `mWakefulness=Awake`. Sent
+  exactly one `adb -s 192.168.1.154:5555 shell input keyevent KEYCODE_POWER`;
+  after three seconds the device reported `mWakefulness=Asleep` and
+  `mWakefulnessChanging=false`. No mute, unmute, volume, or other audio command
+  was sent during implementation, verification, installation, or handoff.

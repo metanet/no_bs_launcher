@@ -341,7 +341,7 @@ Expected: `adb install -r` succeeds, the installed package reports `0.3.0`, the 
 
 Using D-pad-compatible `adb shell input keyevent` and focused UI inspection, create a uniquely named temporary shortcut to an HTTPS site, verify a web tile appears with either its stored favicon or the generic globe, monitor and open the exact `ACTION_VIEW` URL in the device browser, return Home, add/remove it from favorites, remove the shortcut with confirmation, and verify its row, Home tile, favorite ID, and private icon file are gone. Do not issue mute, volume, or power commands.
 
-- [ ] **Step 5: Complete the final release handoff and power down**
+- [x] **Step 5: Complete the final release handoff and power down**
 
 Launch the installed Home activity, confirm it is resumed with `dumpsys activity`, append exact commands/results and any independently observed limitations to `docs/EXECUTION_LOG.md`, commit the authorized finished work, then honor Basri's latest instruction by sending one power key only after confirming the device is Awake. Verify standby/asleep without sending audio or volume input.
 
@@ -372,7 +372,7 @@ a large compressible source plus deletion of the stored PNG and temp file.
 Add connected key-driven coverage that reaches Add and row actions using D-pad
 input and verifies shortcut-removal confirmation initially focuses Cancel.
 
-- [ ] **Step 5: Repeat release verification and final handoff**
+- [x] **Step 5: Repeat release verification and final handoff**
 
 Run the full lint/unit/connected/build/signing gate, install 0.3.0 in place,
 repeat a release shortcut smoke test, commit the authorized finished work, and
