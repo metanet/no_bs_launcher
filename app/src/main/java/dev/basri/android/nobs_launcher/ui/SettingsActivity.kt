@@ -11,6 +11,7 @@ import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.AppCatalog
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.databinding.ActivitySettingsBinding
+import dev.basri.android.nobs_launcher.model.HomeItemId
 import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.LauncherConfigPolicy
 
@@ -56,6 +57,9 @@ class SettingsActivity : Activity() {
                     Toast.makeText(this, R.string.unable_to_open_settings, Toast.LENGTH_SHORT).show()
                 }
         }
+        binding.webShortcuts.setOnClickListener {
+            startActivity(Intent(this, WebShortcutsActivity::class.java))
+        }
         binding.save.setOnClickListener { saveAndFinish() }
     }
 
@@ -73,17 +77,34 @@ class SettingsActivity : Activity() {
     }
 
     private fun saveAndFinish() {
-        val saved = workingConfig.copy(
-            firstRunComplete = true,
-            wifiLabel = binding.wifiLabel.text.toString(),
-            locationLabel = binding.locationLabel.text.toString(),
-            welcomeText = binding.welcomeText.text.toString(),
-            showLocation = binding.showLocation.isChecked,
-            showVpnStatus = binding.showVpnStatus.isChecked,
-            showSystemStats = binding.showSystemStats.isChecked,
-        )
-        store.save(saved)
-        finish()
+        val selectedAppIds = workingConfig.favoriteItemIds
+            .filter { HomeItemId.appPackage(it) != null }
+        val selectedAppIdSet = selectedAppIds.toSet()
+        val saved = store.update { current ->
+            val mergedFavoriteIds = current.favoriteItemIds
+                .filter { HomeItemId.webUuid(it) != null || it in selectedAppIdSet }
+                .toMutableList()
+                .apply {
+                    selectedAppIds.forEach { itemId ->
+                        if (itemId !in this) add(itemId)
+                    }
+                }
+            current.copy(
+                firstRunComplete = true,
+                wifiLabel = binding.wifiLabel.text.toString(),
+                locationLabel = binding.locationLabel.text.toString(),
+                favoriteItemIds = mergedFavoriteIds,
+                welcomeText = binding.welcomeText.text.toString(),
+                showLocation = binding.showLocation.isChecked,
+                showVpnStatus = binding.showVpnStatus.isChecked,
+                showSystemStats = binding.showSystemStats.isChecked,
+            )
+        }
+        if (saved) {
+            finish()
+        } else {
+            Toast.makeText(this, R.string.shortcut_save_failed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     @Suppress("DEPRECATION")

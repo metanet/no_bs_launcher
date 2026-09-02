@@ -30,4 +30,21 @@
     <string name="remove_from_favorites">Remove from favorites</string>
     <string name="uninstall_app">Uninstall app</string>
     <string name="move_mode_hint">Left/Right move · OK saves · Back cancels</string>
+    <string name="web_shortcuts">Web shortcuts</string>
+    <string name="no_web_shortcuts">No web shortcuts yet.</string>
+    <string name="add_shortcut">Add shortcut</string>
+    <string name="edit_shortcut">Edit shortcut</string>
+    <string name="remove_shortcut">Remove shortcut</string>
+    <string name="shortcut_name">Name</string>
+    <string name="shortcut_url">Web address</string>
+    <string name="back">Back</string>
+    <string name="cancel">Cancel</string>
+    <string name="shortcut_name_required">Enter a shortcut name</string>
+    <string name="shortcut_name_too_long">The name is too long</string>
+    <string name="shortcut_url_required">Enter a web address</string>
+    <string name="shortcut_url_too_long">The web address is too long</string>
+    <string name="shortcut_url_invalid">Use a valid HTTP or HTTPS web address</string>
+    <string name="confirm_remove_shortcut">Remove %1$s from the launcher?</string>
+    <string name="shortcut_save_failed">Unable to save shortcut</string>
+    <string name="shortcut_remove_failed">Unable to remove shortcut</string>
 </resources>

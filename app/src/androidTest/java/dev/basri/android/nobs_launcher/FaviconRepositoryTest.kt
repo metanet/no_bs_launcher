@@ -1,0 +1,91 @@
+package dev.basri.android.nobs_launcher
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.basri.android.nobs_launcher.data.FaviconRepository
+import java.io.ByteArrayOutputStream
+import java.io.File
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class FaviconRepositoryTest {
+    private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+    private val repository = FaviconRepository(context)
+
+    @After
+    fun cleanFiles() {
+        File(context.filesDir, FaviconRepository.DIRECTORY_NAME)
+            .listFiles()
+            .orEmpty()
+            .forEach(File::delete)
+    }
+
+    @Test
+    fun validImageIsScaledAndStoredAsPrivatePng() {
+        val source = Bitmap.createBitmap(512, 128, Bitmap.Config.ARGB_8888)
+        val bytes = ByteArrayOutputStream().use { output ->
+            source.compress(Bitmap.CompressFormat.PNG, 100, output)
+            output.toByteArray()
+        }
+        source.recycle()
+
+        val fileName = repository.store(UUID, "https://example.com/path", bytes)
+
+        assertNotNull(fileName)
+        val file = File(File(context.filesDir, FaviconRepository.DIRECTORY_NAME), fileName!!)
+        assertTrue(file.isFile)
+        val stored = checkNotNull(BitmapFactory.decodeFile(file.absolutePath))
+        assertEquals(256, stored.width)
+        assertEquals(64, stored.height)
+        stored.recycle()
+        assertFalse(File(file.parentFile, "$fileName.tmp").exists())
+    }
+
+    @Test
+    fun invalidImageLeavesNoPrivateFile() {
+        assertEquals(null, repository.store(UUID, "https://example.com", byteArrayOf(1, 2, 3)))
+        assertTrue(
+            File(context.filesDir, FaviconRepository.DIRECTORY_NAME)
+                .listFiles()
+                .orEmpty()
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun largeCompressibleImageIsSampledAndDeleteRemovesItsPrivateFiles() {
+        assertEquals(32, FaviconRepository.decodeSampleSizeFor(8_192, 8_192))
+        val source = Bitmap.createBitmap(1_024, 1_024, Bitmap.Config.ARGB_8888)
+        val bytes = ByteArrayOutputStream().use { output ->
+            source.compress(Bitmap.CompressFormat.PNG, 100, output)
+            output.toByteArray()
+        }
+        source.recycle()
+        assertTrue(bytes.size < 256 * 1_024)
+
+        val fileName = checkNotNull(repository.store(UUID, "https://example.com/large", bytes))
+        val directory = File(context.filesDir, FaviconRepository.DIRECTORY_NAME)
+        val storedFile = File(directory, fileName)
+        val temporaryFile = File(directory, "$fileName.tmp")
+        val stored = checkNotNull(BitmapFactory.decodeFile(storedFile.absolutePath))
+        assertEquals(256, maxOf(stored.width, stored.height))
+        stored.recycle()
+
+        repository.delete(fileName)
+
+        assertFalse(storedFile.exists())
+        assertFalse(temporaryFile.exists())
+    }
+
+    private companion object {
+        const val UUID = "11111111-1111-4111-8111-111111111111"
+    }
+}

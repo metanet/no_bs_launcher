@@ -33,10 +33,19 @@ class ManifestPrivacyTest {
         assertEquals(
             setOf(
                 Manifest.permission.ACCESS_NETWORK_STATE,
+                Manifest.permission.INTERNET,
                 Manifest.permission.REQUEST_DELETE_PACKAGES,
             ),
             packageInfo.requestedPermissions.orEmpty().toSet(),
         )
+    }
+
+    @Test
+    fun packageVersionIsZeroPointThreeCodeFour() {
+        val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
+
+        assertEquals("0.3.0-debug", packageInfo.versionName)
+        assertEquals(4L, packageInfo.longVersionCode)
     }
 
     @Test

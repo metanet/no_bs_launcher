@@ -4,18 +4,22 @@ data class LauncherConfig(
     val firstRunComplete: Boolean,
     val wifiLabel: String,
     val locationLabel: String,
-    val selectedPackages: List<String>,
+    val favoriteItemIds: List<String>,
+    val shortcuts: List<WebShortcut> = emptyList(),
     val welcomeText: String = "",
     val showLocation: Boolean = true,
     val showVpnStatus: Boolean = true,
     val showSystemStats: Boolean = true,
 ) {
+    val selectedPackages: List<String>
+        get() = favoriteItemIds.mapNotNull(HomeItemId::appPackage)
+
     companion object {
         val DEFAULT = LauncherConfig(
             firstRunComplete = false,
             wifiLabel = "",
             locationLabel = "",
-            selectedPackages = emptyList(),
+            favoriteItemIds = emptyList(),
         )
     }
 }
@@ -25,22 +29,29 @@ object LauncherConfigPolicy {
         config: LauncherConfig,
         packageName: String,
         visible: Boolean,
+    ): LauncherConfig = setFavorite(config, HomeItemId.app(packageName), visible)
+
+    fun setFavorite(
+        config: LauncherConfig,
+        itemId: String,
+        favorite: Boolean,
     ): LauncherConfig {
-        val ordered = config.selectedPackages.distinct().toMutableList()
-        if (visible && packageName !in ordered) {
-            ordered += packageName
+        if (!HomeItemId.isValid(itemId)) return config
+        val ordered = config.favoriteItemIds.distinct().toMutableList()
+        if (favorite && itemId !in ordered) {
+            ordered += itemId
         }
-        if (!visible) {
-            ordered.removeAll { it == packageName }
+        if (!favorite) {
+            ordered.removeAll { it == itemId }
         }
-        return config.copy(selectedPackages = ordered)
+        return config.copy(favoriteItemIds = ordered)
     }
 
-    fun move(packages: List<String>, fromIndex: Int, toIndex: Int): List<String> {
-        if (fromIndex !in packages.indices || toIndex !in packages.indices || fromIndex == toIndex) {
-            return packages.toList()
+    fun move(itemIds: List<String>, fromIndex: Int, toIndex: Int): List<String> {
+        if (fromIndex !in itemIds.indices || toIndex !in itemIds.indices || fromIndex == toIndex) {
+            return itemIds.toList()
         }
-        return packages.toMutableList().apply {
+        return itemIds.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
         }
     }
@@ -48,9 +59,32 @@ object LauncherConfigPolicy {
     fun normalize(
         config: LauncherConfig,
         installedPackages: Set<String>,
-    ): LauncherConfig = config.copy(
-        selectedPackages = config.selectedPackages
-            .distinct()
-            .filter(installedPackages::contains),
+    ): LauncherConfig {
+        val installedAppIds = installedPackages.mapTo(mutableSetOf(), HomeItemId::app)
+        val shortcutIds = config.shortcuts.mapTo(mutableSetOf(), WebShortcut::itemId)
+        return config.copy(
+            favoriteItemIds = config.favoriteItemIds
+                .distinct()
+                .filter { itemId -> itemId in installedAppIds || itemId in shortcutIds },
+            shortcuts = config.shortcuts.distinctBy(WebShortcut::uuid),
+        )
+    }
+
+    fun upsertShortcut(config: LauncherConfig, shortcut: WebShortcut): LauncherConfig {
+        if (HomeItemId.webUuid(shortcut.itemId) == null) return config
+        val existingIndex = config.shortcuts.indexOfFirst { it.uuid == shortcut.uuid }
+        val updated = config.shortcuts.toMutableList().apply {
+            if (existingIndex >= 0) {
+                this[existingIndex] = shortcut
+            } else {
+                add(shortcut)
+            }
+        }
+        return config.copy(shortcuts = updated.distinctBy(WebShortcut::uuid))
+    }
+
+    fun removeShortcut(config: LauncherConfig, uuid: String): LauncherConfig = config.copy(
+        favoriteItemIds = config.favoriteItemIds.filterNot { it == HomeItemId.web(uuid) },
+        shortcuts = config.shortcuts.filterNot { it.uuid == uuid },
     )
 }

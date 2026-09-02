@@ -26,14 +26,29 @@ whose signing certificate differs.
 ## Home app list controls
 
 Favorites appear first in their saved order. A divider separates them from all
-other launchable apps, which are sorted alphabetically.
+other launchable apps and web shortcuts, which are sorted alphabetically.
 
-- Long-press a favorite for Move, Remove from favorites, or Uninstall app.
+- Long-press a favorite app for Move, Remove from favorites, or Uninstall app.
 - Long-press another app for Add to favorites or Uninstall app.
+- Long-press a web shortcut to add/remove it from Favorites, edit it, remove it,
+  or move it when it is already a favorite.
 - In Move mode, Left/Right shifts the favorite, OK saves, and Back cancels.
 
 Uninstall app opens Android's own confirmation screen; the launcher cannot
 silently remove an application.
+
+## Web shortcuts
+
+Open Settings, then **Web shortcuts**, to add, edit, or remove a named HTTP(S)
+address. A shortcut appears as a normal Home tile and opens through Android's
+default web browser. New shortcuts begin in the alphabetical section and can
+be promoted to Favorites from their Home long-press menu.
+
+At save time only, the launcher asks the configured website origin for
+`/favicon.ico`. It stores a validated, size-bounded PNG in the launcher's
+private directory, or shows the bundled globe when the request fails. It does
+not use a third-party icon service, send cookies, refresh icons in the
+background, or contact saved sites merely because Home is open.
 
 ## First launch and Home selection
 
@@ -95,18 +110,21 @@ Do not uninstall either launcher to switch between them.
 ## Verified release
 
 - APK: `app/build/outputs/apk/release/app-release.apk`
-- Version: `0.2.0`
+- Size: 233,060 bytes
+- Version: `0.3.0` (`versionCode=4`)
 - Minimum Android: 6.0 / API 23
-- Size: 213,888 bytes
 - Signing certificate SHA-256:
   `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`
 
 ## Privacy boundary
 
-The release requests only `android.permission.ACCESS_NETWORK_STATE`. It has no
-Internet, location, analytics, notification-listener, accessibility, or broad
-package-query permission. Labels and app order remain in app-private local
-preferences with Android backup and device transfer disabled.
+The release requests only `android.permission.ACCESS_NETWORK_STATE`,
+`android.permission.INTERNET`, and
+`android.permission.REQUEST_DELETE_PACKAGES`. Internet access is used only for
+the user-triggered, direct-origin favicon request described above. The launcher
+has no location, analytics, notification-listener, accessibility, or broad
+package-query permission. Labels, URLs, favorites, and favicon files remain in
+app-private local storage with Android backup and device transfer disabled.
 
 VPN status is provider-neutral. The launcher displays `VPN connected` whenever
 Android reports an active VPN transport and the panel is enabled. It does not

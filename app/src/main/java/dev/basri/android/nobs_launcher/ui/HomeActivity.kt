@@ -13,10 +13,15 @@ import androidx.recyclerview.widget.GridLayoutManager
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.AppCandidate
 import dev.basri.android.nobs_launcher.data.AppCatalog
+import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.data.LayoutStore
+import dev.basri.android.nobs_launcher.data.WebShortcutService
 import dev.basri.android.nobs_launcher.databinding.ActivityHomeBinding
+import dev.basri.android.nobs_launcher.model.HomeItem
+import dev.basri.android.nobs_launcher.model.HomeItemSectionsPolicy
+import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.LauncherConfigPolicy
-import dev.basri.android.nobs_launcher.model.HomeAppSectionsPolicy
+import dev.basri.android.nobs_launcher.model.WebShortcut
 import dev.basri.android.nobs_launcher.stats.SystemStatsDisplay
 import dev.basri.android.nobs_launcher.stats.SystemStatsMonitor
 import dev.basri.android.nobs_launcher.status.VpnStatusMonitor
@@ -27,13 +32,14 @@ class HomeActivity : Activity() {
     private lateinit var store: LayoutStore
     private lateinit var catalog: AppCatalog
     private lateinit var adapter: AppGridAdapter
+    private lateinit var shortcutService: WebShortcutService
     private lateinit var clockController: ClockController
     private lateinit var vpnStatusMonitor: VpnStatusMonitor
     private lateinit var systemStatsMonitor: SystemStatsMonitor
-    private var favoriteApps = listOf<AppCandidate>()
-    private var remainingApps = listOf<AppCandidate>()
+    private var favoriteItems = listOf<HomeItem>()
+    private var remainingItems = listOf<HomeItem>()
     private var moveSnapshot: List<String>? = null
-    private var movingPackage: String? = null
+    private var movingItemId: String? = null
     private var swallowKeyUp: Int? = null
     private var showVpnStatus = false
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -47,9 +53,12 @@ class HomeActivity : Activity() {
 
         store = LayoutStore(this)
         catalog = AppCatalog(this)
+        val favicons = FaviconRepository(this)
+        shortcutService = WebShortcutService(store, favicons)
         adapter = AppGridAdapter(
-            onOpen = ::openApp,
-            onLongPress = ::showAppActions,
+            favicons = favicons,
+            onOpen = ::openItem,
+            onLongPress = ::showItemActions,
         )
         binding.appGrid.layoutManager = GridLayoutManager(this, GRID_COLUMNS).apply {
             spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
@@ -136,9 +145,7 @@ class HomeActivity : Activity() {
 
     @Deprecated("Deprecated in Android; required for API 23 TV compatibility")
     override fun onBackPressed() {
-        if (moveSnapshot != null) {
-            cancelMoveMode()
-        }
+        if (moveSnapshot != null) cancelMoveMode()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -146,38 +153,41 @@ class HomeActivity : Activity() {
         if (hasFocus) enterImmersiveMode()
     }
 
-    private fun bindHome(preferredFocusPackage: String? = currentFocusedPackage()) {
+    private fun bindHome(preferredFocusItemId: String? = currentFocusedItemId()) {
         val catalogApps = catalog.loadApps()
-        val config = store.load()
-        val normalized = LauncherConfigPolicy.normalize(
-            config,
-            catalogApps.mapTo(mutableSetOf(), AppCandidate::packageName),
-        )
-        if (normalized != config) store.save(normalized)
+        val installedPackages = catalogApps.mapTo(mutableSetOf(), AppCandidate::packageName)
+        var normalized: LauncherConfig? = null
+        store.update { current ->
+            LauncherConfigPolicy.normalize(current, installedPackages).also { normalized = it }
+        }
+        val currentConfig = normalized ?: LauncherConfigPolicy.normalize(store.load(), installedPackages)
 
-        val sections = HomeAppSectionsPolicy.compose(catalogApps, normalized.selectedPackages)
-        favoriteApps = sections.favorites
-        remainingApps = sections.remaining
-        adapter.submitSections(favoriteApps, remainingApps)
-        binding.emptyState.visibility = if (catalogApps.isEmpty()) View.VISIBLE else View.GONE
-        binding.welcome.text = normalized.welcomeText
-        binding.welcome.visibility = if (normalized.welcomeText.isBlank()) View.GONE else View.VISIBLE
-        binding.wifi.text = normalized.wifiLabel
-        binding.wifi.visibility = if (normalized.wifiLabel.isBlank()) View.GONE else View.VISIBLE
-        binding.location.text = normalized.locationLabel
-        binding.location.visibility = if (normalized.showLocation && normalized.locationLabel.isNotBlank()) {
+        val allItems = catalogApps.map(HomeItem::App) + currentConfig.shortcuts.map(HomeItem::Web)
+        val sections = HomeItemSectionsPolicy.compose(allItems, currentConfig.favoriteItemIds)
+        favoriteItems = sections.favorites
+        remainingItems = sections.remaining
+        adapter.submitSections(favoriteItems, remainingItems)
+        binding.emptyState.visibility = if (allItems.isEmpty()) View.VISIBLE else View.GONE
+        binding.welcome.text = currentConfig.welcomeText
+        binding.welcome.visibility = if (currentConfig.welcomeText.isBlank()) View.GONE else View.VISIBLE
+        binding.wifi.text = currentConfig.wifiLabel
+        binding.wifi.visibility = if (currentConfig.wifiLabel.isBlank()) View.GONE else View.VISIBLE
+        binding.location.text = currentConfig.locationLabel
+        binding.location.visibility = if (
+            currentConfig.showLocation && currentConfig.locationLabel.isNotBlank()
+        ) {
             View.VISIBLE
         } else {
             View.GONE
         }
-        showVpnStatus = normalized.showVpnStatus
-        if (normalized.showVpnStatus) {
+        showVpnStatus = currentConfig.showVpnStatus
+        if (currentConfig.showVpnStatus) {
             vpnStatusMonitor.start()
         } else {
             vpnStatusMonitor.stop()
             binding.vpnStatus.visibility = View.GONE
         }
-        if (normalized.showSystemStats) {
+        if (currentConfig.showSystemStats) {
             binding.systemStatsPanel.visibility = View.VISIBLE
             systemStatsMonitor.start()
         } else {
@@ -185,14 +195,14 @@ class HomeActivity : Activity() {
             binding.systemStatsPanel.visibility = View.GONE
         }
 
-        val focusIndex = preferredFocusPackage
-            ?.let(adapter::positionOfPackage)
+        val focusIndex = preferredFocusItemId
+            ?.let(adapter::positionOfItem)
             ?.takeIf { it >= 0 }
         binding.appGrid.post {
             if (focusIndex != null) {
                 binding.appGrid.findViewHolderForAdapterPosition(focusIndex)?.itemView?.requestFocus()
                     ?: binding.appGrid.scrollToPosition(focusIndex)
-            } else if (catalogApps.isNotEmpty()) {
+            } else if (allItems.isNotEmpty()) {
                 binding.appGrid.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
             } else {
                 binding.settings.requestFocus()
@@ -207,61 +217,103 @@ class HomeActivity : Activity() {
         binding.networkStats.text = getString(R.string.network_stats, stats.network)
     }
 
-    private fun openApp(app: AppCandidate) {
+    private fun openItem(item: HomeItem) {
         if (moveSnapshot != null) return
-        runCatching { startActivity(catalog.launchIntent(app)) }
-            .onFailure { showLaunchError(app.label) }
+        val launch = when (item) {
+            is HomeItem.App -> catalog.launchIntent(item.candidate)
+            is HomeItem.Web -> Intent(Intent.ACTION_VIEW, Uri.parse(item.shortcut.url))
+        }
+        runCatching { startActivity(launch) }
+            .onFailure { showLaunchError(item.label) }
     }
 
     private fun showLaunchError(label: String) {
-        binding.launchError.text = getString(R.string.unable_to_open, label)
-        binding.launchError.visibility = View.VISIBLE
-        mainHandler.removeCallbacks(hideLaunchError)
-        mainHandler.postDelayed(hideLaunchError, LAUNCH_ERROR_DURATION_MS)
+        showActionError(getString(R.string.unable_to_open, label))
     }
 
-    private fun showAppActions(app: AppCandidate, favorite: Boolean) {
+    private fun showItemActions(item: HomeItem, favorite: Boolean) {
         if (moveSnapshot != null) return
-        val actions = if (favorite) {
-            listOf(AppAction.MOVE, AppAction.REMOVE_FAVORITE, AppAction.UNINSTALL)
-        } else {
-            listOf(AppAction.ADD_FAVORITE, AppAction.UNINSTALL)
+        val actions = when (item) {
+            is HomeItem.App -> if (favorite) {
+                listOf(HomeAction.MOVE, HomeAction.REMOVE_FAVORITE, HomeAction.UNINSTALL)
+            } else {
+                listOf(HomeAction.ADD_FAVORITE, HomeAction.UNINSTALL)
+            }
+            is HomeItem.Web -> if (favorite) {
+                listOf(
+                    HomeAction.MOVE,
+                    HomeAction.REMOVE_FAVORITE,
+                    HomeAction.EDIT_SHORTCUT,
+                    HomeAction.REMOVE_SHORTCUT,
+                )
+            } else {
+                listOf(
+                    HomeAction.ADD_FAVORITE,
+                    HomeAction.EDIT_SHORTCUT,
+                    HomeAction.REMOVE_SHORTCUT,
+                )
+            }
         }
-        val labels = actions.map { action -> getString(action.labelResource) }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle(app.label)
-            .setItems(labels) { _, index ->
+            .setTitle(item.label)
+            .setItems(actions.map { getString(it.labelResource) }.toTypedArray()) { _, index ->
                 when (actions[index]) {
-                    AppAction.ADD_FAVORITE -> setFavorite(app, favorite = true)
-                    AppAction.MOVE -> startMoveMode(app)
-                    AppAction.REMOVE_FAVORITE -> setFavorite(app, favorite = false)
-                    AppAction.UNINSTALL -> uninstallApp(app)
+                    HomeAction.ADD_FAVORITE -> setFavorite(item, favorite = true)
+                    HomeAction.MOVE -> startMoveMode(item)
+                    HomeAction.REMOVE_FAVORITE -> setFavorite(item, favorite = false)
+                    HomeAction.UNINSTALL -> uninstallApp((item as HomeItem.App).candidate)
+                    HomeAction.EDIT_SHORTCUT -> editShortcut((item as HomeItem.Web).shortcut)
+                    HomeAction.REMOVE_SHORTCUT -> confirmShortcutRemoval(
+                        (item as HomeItem.Web).shortcut,
+                    )
                 }
             }
             .show()
     }
 
-    private fun setFavorite(app: AppCandidate, favorite: Boolean) {
-        val updated = LauncherConfigPolicy.setVisible(
-            config = store.load(),
-            packageName = app.packageName,
-            visible = favorite,
-        )
-        store.save(updated)
-        bindHome(app.packageName)
+    private fun setFavorite(item: HomeItem, favorite: Boolean) {
+        if (store.update { current ->
+                LauncherConfigPolicy.setFavorite(current, item.id, favorite)
+            }
+        ) {
+            bindHome(item.id)
+        } else {
+            showActionError(getString(R.string.shortcut_save_failed))
+        }
     }
 
     private fun uninstallApp(app: AppCandidate) {
         runCatching {
-            startActivity(
-                Intent(
-                    Intent.ACTION_DELETE,
-                    Uri.parse("package:${app.packageName}"),
-                ),
-            )
+            startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}")))
         }.onFailure {
             showActionError(getString(R.string.unable_to_uninstall, app.label))
         }
+    }
+
+    private fun editShortcut(shortcut: WebShortcut) {
+        startActivity(
+            Intent(this, WebShortcutsActivity::class.java)
+                .putExtra(WebShortcutsActivity.EXTRA_EDIT_SHORTCUT_ID, shortcut.uuid),
+        )
+    }
+
+    private fun confirmShortcutRemoval(shortcut: WebShortcut) {
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.remove_shortcut)
+            .setMessage(getString(R.string.confirm_remove_shortcut, shortcut.name))
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.remove_shortcut) { _, _ ->
+                if (shortcutService.remove(shortcut.uuid)) {
+                    bindHome()
+                } else {
+                    showActionError(getString(R.string.shortcut_remove_failed))
+                }
+            }
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
+        }
+        dialog.show()
     }
 
     private fun showActionError(message: String) {
@@ -271,56 +323,56 @@ class HomeActivity : Activity() {
         mainHandler.postDelayed(hideLaunchError, LAUNCH_ERROR_DURATION_MS)
     }
 
-    private fun startMoveMode(app: AppCandidate) {
+    private fun startMoveMode(item: HomeItem) {
         if (moveSnapshot != null) return
-        moveSnapshot = favoriteApps.map(AppCandidate::packageName)
-        movingPackage = app.packageName
-        adapter.setMovingPackage(app.packageName)
+        moveSnapshot = favoriteItems.map(HomeItem::id)
+        movingItemId = item.id
+        adapter.setMovingItemId(item.id)
         binding.moveModeHint.visibility = View.VISIBLE
     }
 
     private fun moveByDirection(delta: Int): Boolean {
-        val packageName = movingPackage ?: return true
-        val fromIndex = favoriteApps.indexOfFirst { it.packageName == packageName }
+        val itemId = movingItemId ?: return true
+        val fromIndex = favoriteItems.indexOfFirst { it.id == itemId }
         if (fromIndex < 0) return true
         val toIndex = fromIndex + delta
-        if (toIndex !in favoriteApps.indices) return true
+        if (toIndex !in favoriteItems.indices) return true
 
-        val reorderedPackages = LauncherConfigPolicy.move(
-            favoriteApps.map(AppCandidate::packageName),
+        val reorderedIds = LauncherConfigPolicy.move(
+            favoriteItems.map(HomeItem::id),
             fromIndex,
             toIndex,
         )
-        val byPackage = favoriteApps.associateBy(AppCandidate::packageName)
-        favoriteApps = reorderedPackages.mapNotNull(byPackage::get)
-        adapter.submitSections(favoriteApps, remainingApps)
-        adapter.setMovingPackage(packageName)
+        val byId = favoriteItems.associateBy(HomeItem::id)
+        favoriteItems = reorderedIds.mapNotNull(byId::get)
+        adapter.submitSections(favoriteItems, remainingItems)
+        adapter.setMovingItemId(itemId)
         requestTileFocus(toIndex)
         return true
     }
 
     private fun saveMoveMode() {
-        val config = store.load().copy(
-            selectedPackages = favoriteApps.map(AppCandidate::packageName),
-        )
-        store.save(config)
+        val favoriteItemIds = favoriteItems.map(HomeItem::id)
+        if (!store.update { current -> current.copy(favoriteItemIds = favoriteItemIds) }) {
+            showActionError(getString(R.string.shortcut_save_failed))
+        }
         finishMoveMode()
     }
 
     private fun cancelMoveMode() {
-        val originalPackages = moveSnapshot.orEmpty()
-        val byPackage = favoriteApps.associateBy(AppCandidate::packageName)
-        favoriteApps = originalPackages.mapNotNull(byPackage::get)
-        adapter.submitSections(favoriteApps, remainingApps)
-        val focusIndex = favoriteApps.indexOfFirst { it.packageName == movingPackage }
+        val originalIds = moveSnapshot.orEmpty()
+        val byId = favoriteItems.associateBy(HomeItem::id)
+        favoriteItems = originalIds.mapNotNull(byId::get)
+        adapter.submitSections(favoriteItems, remainingItems)
+        val focusIndex = favoriteItems.indexOfFirst { it.id == movingItemId }
         finishMoveMode()
         if (focusIndex >= 0) requestTileFocus(focusIndex)
     }
 
     private fun finishMoveMode() {
         moveSnapshot = null
-        movingPackage = null
-        adapter.setMovingPackage(null)
+        movingItemId = null
+        adapter.setMovingItemId(null)
         binding.moveModeHint.visibility = View.GONE
     }
 
@@ -333,10 +385,10 @@ class HomeActivity : Activity() {
         }
     }
 
-    private fun currentFocusedPackage(): String? {
+    private fun currentFocusedItemId(): String? {
         val holder = binding.appGrid.findContainingViewHolder(currentFocus ?: return null)
             ?: return null
-        return adapter.packageAt(holder.bindingAdapterPosition)
+        return adapter.itemIdAt(holder.bindingAdapterPosition)
     }
 
     private fun isMoveKey(keyCode: Int): Boolean = keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
@@ -364,10 +416,12 @@ class HomeActivity : Activity() {
         const val LAUNCH_ERROR_DURATION_MS = 4_000L
     }
 
-    private enum class AppAction(val labelResource: Int) {
+    private enum class HomeAction(val labelResource: Int) {
         ADD_FAVORITE(R.string.add_to_favorites),
         MOVE(R.string.move),
         REMOVE_FAVORITE(R.string.remove_from_favorites),
         UNINSTALL(R.string.uninstall_app),
+        EDIT_SHORTCUT(R.string.edit_shortcut),
+        REMOVE_SHORTCUT(R.string.remove_shortcut),
     }
 }

@@ -6,22 +6,28 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.longClick
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.assertion.ViewAssertions.doesNotExist
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.RootMatchers.withDecorView
+import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.isChecked
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.espresso.matcher.ViewMatchers.isDescendantOfA
+import androidx.test.espresso.matcher.ViewMatchers.hasErrorText
+import androidx.test.espresso.matcher.ViewMatchers.hasFocus
 import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import android.view.KeyEvent
+import android.view.InputDevice
+import android.view.KeyCharacterMap
 import android.view.View
 import android.app.Activity
 import android.app.Instrumentation
@@ -37,8 +43,11 @@ import dev.basri.android.nobs_launcher.data.AppCatalog
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.HomeAppSectionsPolicy
+import dev.basri.android.nobs_launcher.model.HomeItemId
+import dev.basri.android.nobs_launcher.model.WebShortcut
 import dev.basri.android.nobs_launcher.ui.HomeActivity
 import dev.basri.android.nobs_launcher.ui.SettingsActivity
+import dev.basri.android.nobs_launcher.ui.WebShortcutsActivity
 import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.not
@@ -49,6 +58,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.FileInputStream
+import android.os.SystemClock
 
 @RunWith(AndroidJUnit4::class)
 class HomeAndSettingsFlowTest {
@@ -84,7 +94,7 @@ class HomeAndSettingsFlowTest {
                 firstRunComplete = true,
                 wifiLabel = "Kahveci House",
                 locationLabel = "London",
-                selectedPackages = emptyList(),
+                favoriteItemIds = emptyList(),
                 welcomeText = "Welcome, Basri",
             ),
         )
@@ -112,7 +122,7 @@ class HomeAndSettingsFlowTest {
         val app = uniqueCatalogApps(1).single()
         LayoutStore(context).save(completedConfig())
 
-        ActivityScenario.launch(SettingsActivity::class.java).use {
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             onView(
                 allOf(
                     withId(R.id.manage_app_selected),
@@ -130,13 +140,14 @@ class HomeAndSettingsFlowTest {
             onView(withId(R.id.location_label)).perform(replaceText("London"))
             onView(withId(R.id.show_vpn_status)).perform(click())
             onView(withId(R.id.show_system_stats)).perform(click())
-            onView(
-                allOf(
-                    withId(R.id.manage_app_row),
-                    withContentDescription(app.label),
-                ),
-            ).perform(click())
-            onView(withId(R.id.save)).perform(click())
+            scenario.onActivity { settings ->
+                val appList = settings.findViewById<RecyclerView>(R.id.available_apps)
+                val appRow = (0 until appList.childCount)
+                    .map(appList::getChildAt)
+                    .single { it.contentDescription?.toString() == app.label }
+                appRow.performClick()
+                settings.findViewById<View>(R.id.save).performClick()
+            }
         }
 
         assertEquals(
@@ -144,7 +155,7 @@ class HomeAndSettingsFlowTest {
                 firstRunComplete = true,
                 wifiLabel = "Kahveci House",
                 locationLabel = "London",
-                selectedPackages = listOf(app.packageName),
+                favoriteItemIds = listOf(HomeItemId.app(app.packageName)),
                 welcomeText = "Welcome, Basri",
                 showLocation = true,
                 showVpnStatus = false,
@@ -152,6 +163,122 @@ class HomeAndSettingsFlowTest {
             ),
             LayoutStore(context).load(),
         )
+    }
+
+    @Test
+    fun settingsManagesValidatedEditableWebShortcutsAndConfirmedRemoval() {
+        LayoutStore(context).save(completedConfig())
+
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            onView(withId(R.id.web_shortcuts)).check(matches(isDisplayed())).perform(click())
+            onView(withId(R.id.shortcut_empty)).check(matches(isDisplayed()))
+            onView(withId(R.id.shortcut_list)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.add_shortcut)).check(matches(isDisplayed())).perform(click())
+
+            onView(withId(R.id.shortcut_name)).perform(replaceText("Basri's site"))
+            onView(withId(R.id.shortcut_url)).perform(replaceText("file:///not-allowed"))
+            closeSoftKeyboard()
+            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            onView(withId(R.id.shortcut_url)).check(
+                matches(hasErrorText(context.getString(R.string.shortcut_url_invalid))),
+            )
+
+            onView(withId(R.id.shortcut_url)).perform(
+                replaceText("http://127.0.0.1:9/first"),
+            )
+            closeSoftKeyboard()
+            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            onView(withContentDescription("Basri's site")).check(matches(isDisplayed()))
+            onView(withText("http://127.0.0.1:9/first")).check(matches(isDisplayed()))
+
+            val created = LayoutStore(context).load().shortcuts.single()
+            val favoriteConfig = LayoutStore(context).load().copy(
+                favoriteItemIds = listOf(HomeItemId.web(created.uuid)),
+            )
+            assertTrue(LayoutStore(context).save(favoriteConfig))
+
+            onView(withId(R.id.shortcut_edit)).perform(click())
+            onView(withId(R.id.shortcut_name)).perform(replaceText("Edited site"))
+            onView(withId(R.id.shortcut_url)).perform(
+                replaceText("http://127.0.0.1:9/second"),
+            )
+            closeSoftKeyboard()
+            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+
+            val edited = LayoutStore(context).load().shortcuts.single()
+            assertEquals(created.uuid, edited.uuid)
+            assertEquals("Edited site", edited.name)
+            assertEquals("http://127.0.0.1:9/second", edited.url)
+            assertEquals(listOf(HomeItemId.web(created.uuid)), LayoutStore(context).load().favoriteItemIds)
+
+            onView(withId(R.id.shortcut_remove)).perform(click())
+            onView(withId(android.R.id.button2)).inRoot(isDialog()).perform(click())
+            onView(withContentDescription("Edited site")).check(matches(isDisplayed()))
+
+            onView(withId(R.id.shortcut_remove)).perform(click())
+            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            val afterRemoval = LayoutStore(context).load()
+            assertEquals(emptyList<dev.basri.android.nobs_launcher.model.WebShortcut>(), afterRemoval.shortcuts)
+            assertEquals(emptyList<String>(), afterRemoval.favoriteItemIds)
+            onView(withId(R.id.shortcut_list)).check { view, _ ->
+                assertEquals(0, (view as RecyclerView).adapter?.itemCount)
+            }
+            onView(withId(R.id.shortcut_list)).check(matches(withEffectiveVisibility(GONE)))
+            onView(withId(R.id.shortcut_empty)).check(matches(isDisplayed()))
+
+            onView(withId(R.id.back_to_settings)).perform(click())
+            onView(withId(R.id.web_shortcuts)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun settingsSavePreservesShortcutStateChangedAfterItsWorkingCopyWasCaptured() {
+        LayoutStore(context).save(completedConfig())
+        val shortcut = webShortcut(name = "Persisted web", url = "https://example.com/persisted")
+
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            scenario.onActivity { settings ->
+                val current = LayoutStore(settings).load()
+                assertTrue(
+                    LayoutStore(settings).save(
+                        current.copy(
+                            favoriteItemIds = current.favoriteItemIds + shortcut.itemId,
+                            shortcuts = listOf(shortcut),
+                        ),
+                    ),
+                )
+                settings.findViewById<View>(R.id.save).performClick()
+            }
+        }
+
+        val saved = LayoutStore(context).load()
+        assertEquals(listOf(shortcut), saved.shortcuts)
+        assertEquals(listOf(shortcut.itemId), saved.favoriteItemIds)
+    }
+
+    @Test
+    fun webShortcutManagementSupportsDpadAddRowAndSafeRemovalFocus() {
+        LayoutStore(context).save(completedConfig())
+
+        ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_LEFT)
+            onView(withId(R.id.add_shortcut)).check(matches(hasFocus()))
+        }
+
+        val shortcut = webShortcut(name = "D-pad web", url = "http://127.0.0.1:9/dpad")
+        LayoutStore(context).save(completedConfig().copy(shortcuts = listOf(shortcut)))
+
+        ActivityScenario.launch(WebShortcutsActivity::class.java).use {
+            onView(withContentDescription("D-pad web")).check(matches(isDisplayed()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_LEFT)
+            onView(withId(R.id.shortcut_edit)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+            onView(withId(R.id.shortcut_remove)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_CENTER)
+            onView(withId(android.R.id.button2)).inRoot(isDialog()).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_CENTER)
+            onView(withContentDescription("D-pad web")).check(matches(isDisplayed()))
+        }
     }
 
     @Test
@@ -176,6 +303,26 @@ class HomeAndSettingsFlowTest {
         }
 
         assertEquals(original, LayoutStore(context).load())
+    }
+
+    @Test
+    fun legacyPackageFavoritesMigrateAtomicallyInExactOrder() {
+        val preferences = context.getSharedPreferences(
+            LayoutStore.PREFERENCES_NAME,
+            android.content.Context.MODE_PRIVATE,
+        )
+        val legacyPackages = listOf("com.example.second", "com.example.first")
+        assertTrue(
+            preferences.edit()
+                .putString("selected_packages", legacyPackages.joinToString("\n"))
+                .commit(),
+        )
+
+        val loaded = LayoutStore(context).load()
+
+        assertEquals(legacyPackages.map(HomeItemId::app), loaded.favoriteItemIds)
+        assertTrue(preferences.contains("favorite_item_ids"))
+        assertFalse(preferences.contains("selected_packages"))
     }
 
     @Test
@@ -311,6 +458,144 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun homeShowsMixedFavoritesAndDispatchesExactBrowserUrl() {
+        val app = uniqueCatalogApps(1).single()
+        val shortcut = webShortcut(name = "Basri web portal", url = "https://example.com/tv?mode=1")
+        LayoutStore(context).save(
+            completedConfig().copy(
+                favoriteItemIds = listOf(shortcut.itemId, HomeItemId.app(app.packageName)),
+                shortcuts = listOf(shortcut),
+            ),
+        )
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var observedIntent: Intent? = null
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
+                if (intent.action != Intent.ACTION_VIEW) return null
+                observedIntent = intent
+                return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+            }
+        }
+        instrumentation.addMonitor(monitor)
+
+        try {
+            ActivityScenario.launch(HomeActivity::class.java).use {
+                onView(withId(R.id.app_grid)).check { view, _ ->
+                    val grid = view as RecyclerView
+                    assertEquals(
+                        shortcut.name,
+                        grid.findViewHolderForAdapterPosition(0)
+                            ?.itemView
+                            ?.contentDescription
+                            ?.toString(),
+                    )
+                    assertEquals(
+                        app.label,
+                        grid.findViewHolderForAdapterPosition(1)
+                            ?.itemView
+                            ?.contentDescription
+                            ?.toString(),
+                    )
+                }
+                onView(withContentDescription(shortcut.name)).perform(click())
+                assertEquals(Intent.ACTION_VIEW, observedIntent?.action)
+                assertEquals(shortcut.url, observedIntent?.data?.toString())
+                assertEquals(null, observedIntent?.component)
+            }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
+    }
+
+    @Test
+    fun shortcutMenusManageFavoritesAndOpenTheExistingEditor() {
+        val shortcut = webShortcut(name = "Editable web")
+        LayoutStore(context).save(completedConfig().copy(shortcuts = listOf(shortcut)))
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        var observedEditIntent: Intent? = null
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
+                if (intent.component?.className != WebShortcutsActivity::class.java.name) return null
+                observedEditIntent = intent
+                return Instrumentation.ActivityResult(Activity.RESULT_CANCELED, null)
+            }
+        }
+        instrumentation.addMonitor(monitor)
+
+        try {
+            ActivityScenario.launch(HomeActivity::class.java).use {
+                onView(withContentDescription(shortcut.name)).perform(longClick())
+                onView(withText(R.string.add_to_favorites)).check(matches(isDisplayed()))
+                onView(withText(R.string.edit_shortcut)).check(matches(isDisplayed()))
+                onView(withText(R.string.remove_shortcut)).check(matches(isDisplayed()))
+                onView(withText(R.string.uninstall_app)).check(doesNotExist())
+                onView(withText(R.string.add_to_favorites)).perform(click())
+                assertEquals(listOf(shortcut.itemId), LayoutStore(context).load().favoriteItemIds)
+
+                onView(withContentDescription(shortcut.name)).perform(longClick())
+                onView(withText(R.string.move)).check(matches(isDisplayed()))
+                onView(withText(R.string.remove_from_favorites)).check(matches(isDisplayed()))
+                onView(withText(R.string.edit_shortcut)).perform(click())
+                assertEquals(shortcut.uuid, observedEditIntent?.getStringExtra(WebShortcutsActivity.EXTRA_EDIT_SHORTCUT_ID))
+
+                onView(withContentDescription(shortcut.name)).perform(longClick())
+                onView(withText(R.string.remove_from_favorites)).perform(click())
+                assertEquals(emptyList<String>(), LayoutStore(context).load().favoriteItemIds)
+            }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
+    }
+
+    @Test
+    fun mixedMovePersistsWebAndAppIdsAndConfirmedRemovalCleansIcon() {
+        val apps = uniqueCatalogApps(2)
+        val shortcut = webShortcut(name = "Movable web", icon = "test-old.png")
+        val originalOrder = listOf(
+            HomeItemId.app(apps[0].packageName),
+            shortcut.itemId,
+            HomeItemId.app(apps[1].packageName),
+        )
+        val iconDirectory = java.io.File(
+            context.filesDir,
+            dev.basri.android.nobs_launcher.data.FaviconRepository.DIRECTORY_NAME,
+        ).apply { mkdirs() }
+        val iconFile = java.io.File(iconDirectory, checkNotNull(shortcut.faviconFileName))
+        assertTrue(iconFile.createNewFile() || iconFile.isFile)
+        LayoutStore(context).save(
+            completedConfig().copy(
+                favoriteItemIds = originalOrder,
+                shortcuts = listOf(shortcut),
+            ),
+        )
+
+        ActivityScenario.launch(HomeActivity::class.java).use { scenario ->
+            onView(withContentDescription(shortcut.name)).perform(longClick())
+            onView(withText(R.string.move)).perform(click())
+            scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+            scenario.pressActivityKey(KeyEvent.KEYCODE_DPAD_CENTER)
+            assertEquals(
+                listOf(originalOrder[0], originalOrder[2], originalOrder[1]),
+                LayoutStore(context).load().favoriteItemIds,
+            )
+            scenario.finishGridAnimations()
+
+            onView(withContentDescription(shortcut.name)).perform(longClick())
+            onView(withText(R.string.remove_shortcut)).perform(click())
+            onView(withId(android.R.id.button2)).inRoot(isDialog()).perform(click())
+            assertTrue(iconFile.isFile)
+            assertEquals(listOf(shortcut), LayoutStore(context).load().shortcuts)
+
+            onView(withContentDescription(shortcut.name)).perform(longClick())
+            onView(withText(R.string.remove_shortcut)).perform(click())
+            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            assertFalse(iconFile.exists())
+            assertEquals(emptyList<WebShortcut>(), LayoutStore(context).load().shortcuts)
+            assertFalse(shortcut.itemId in LayoutStore(context).load().favoriteItemIds)
+        }
+    }
+
+    @Test
     fun moveMenuShiftsAcrossRowsOkPersistsAndBackCancels() {
         val apps = uniqueCatalogApps(5)
         val originalOrder = apps.map(AppCandidate::packageName)
@@ -435,14 +720,47 @@ class HomeAndSettingsFlowTest {
         firstRunComplete = true,
         wifiLabel = "",
         locationLabel = "",
-        selectedPackages = selectedPackages,
+        favoriteItemIds = selectedPackages.map(HomeItemId::app),
     )
 
-    private fun ActivityScenario<HomeActivity>.pressActivityKey(keyCode: Int) {
+    private fun webShortcut(
+        name: String,
+        url: String = "https://example.com",
+        icon: String? = null,
+    ) = WebShortcut(
+        uuid = "44444444-4444-4444-8444-444444444444",
+        name = name,
+        url = url,
+        faviconFileName = icon,
+    )
+
+    private fun <A : Activity> ActivityScenario<A>.pressActivityKey(keyCode: Int) {
         onActivity { activity ->
             activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
             activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }
+    }
+
+    private fun sendDpadKey(keyCode: Int) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.waitForIdleSync()
+        val downTime = SystemClock.uptimeMillis()
+        val down = KeyEvent(
+            downTime,
+            downTime,
+            KeyEvent.ACTION_DOWN,
+            keyCode,
+            0,
+            0,
+            KeyCharacterMap.VIRTUAL_KEYBOARD,
+            0,
+            0,
+            InputDevice.SOURCE_DPAD,
+        )
+        val up = KeyEvent.changeAction(down, KeyEvent.ACTION_UP)
+        assertTrue(instrumentation.uiAutomation.injectInputEvent(down, true))
+        assertTrue(instrumentation.uiAutomation.injectInputEvent(up, true))
+        instrumentation.waitForIdleSync()
     }
 
     private fun ActivityScenario<HomeActivity>.finishGridAnimations() {

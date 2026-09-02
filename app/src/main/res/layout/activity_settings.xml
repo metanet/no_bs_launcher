@@ -134,9 +134,20 @@
         tools:ignore="ButtonStyle">
 
         <Button
+            android:id="@+id/web_shortcuts"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:background="@drawable/tile_selector"
+            android:paddingHorizontal="20dp"
+            android:text="@string/web_shortcuts"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
+
+        <Button
             android:id="@+id/open_android_settings"
             android:layout_width="wrap_content"
             android:layout_height="56dp"
+            android:layout_marginStart="18dp"
             android:background="@drawable/tile_selector"
             android:paddingHorizontal="20dp"
             android:text="@string/open_android_settings"
