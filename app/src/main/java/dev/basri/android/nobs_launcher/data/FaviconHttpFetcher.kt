@@ -64,6 +64,7 @@ class FaviconHttpFetcher(
                         if (redirects >= maxRedirects) return null
                         val location = response.header("Location") ?: return null
                         return@use currentUrl.resolve(location)
+                            ?.takeIf { target -> isAllowedRedirect(currentUrl, target) }
                     }
                     if (response.code !in 200..299) return null
 

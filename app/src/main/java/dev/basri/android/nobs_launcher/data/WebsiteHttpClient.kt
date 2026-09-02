@@ -66,6 +66,7 @@ class WebsiteHttpClient(
                         val location = response.header("Location")
                             ?: return WebsiteProbeResult.Inaccessible
                         return@use currentUrl.resolve(location)
+                            ?.takeIf { target -> isAllowedRedirect(currentUrl, target) }
                     }
 
                     if (response.code == HTTP_UNAUTHORIZED || response.code == HTTP_FORBIDDEN) {

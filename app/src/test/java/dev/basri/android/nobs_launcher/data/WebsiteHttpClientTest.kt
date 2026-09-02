@@ -126,6 +126,21 @@ class WebsiteHttpClientTest {
     }
 
     @Test
+    fun rejectsHttpsToHttpRedirects() {
+        val body = TrackingResponseBody("redirect", "text/plain")
+        val factory = FakeCallFactory { request, _ ->
+            response(request, 302, body, mapOf("Location" to "http://example.com/plain"))
+        }
+
+        assertEquals(
+            WebsiteProbeResult.Inaccessible,
+            WebsiteHttpClient(callFactory = factory).probe(START_URL),
+        )
+        assertEquals(1, factory.calls.size)
+        assertTrue(body.closed)
+    }
+
+    @Test
     fun rejectsMalformedAndNonHttpUrlsWithoutCreatingCalls() {
         val factory = FakeCallFactory { _, _ -> error("must not execute") }
 

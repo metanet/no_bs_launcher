@@ -150,6 +150,18 @@ class FaviconHttpFetcherTest {
     }
 
     @Test
+    fun rejectsHttpsToHttpRedirects() {
+        val body = TrackingResponseBody(byteArrayOf(1), "image/png")
+        val factory = FakeCallFactory { request, _ ->
+            response(request, 302, body, mapOf("Location" to "http://example.com/icon.png"))
+        }
+
+        assertNull(FaviconHttpFetcher(callFactory = factory).fetch(ICON_URL))
+        assertEquals(1, factory.calls.size)
+        assertTrue(body.closed)
+    }
+
+    @Test
     fun rejectsInvalidUrlsHttpErrorsAndDeclaredOversizeBodies() {
         val neverCalled = FakeCallFactory { _, _ -> error("must not execute") }
         assertNull(FaviconHttpFetcher(callFactory = neverCalled).fetch("not a url"))
