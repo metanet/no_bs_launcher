@@ -69,7 +69,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
-import java.io.FileInputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.nio.charset.StandardCharsets
@@ -1052,20 +1051,16 @@ class HomeAndSettingsFlowTest {
 
     @Test
     fun failedLaunchKeepsHomeResumedAndShowsAnError() {
-        val brokenApp = uniqueCatalogApps(1).single()
+        val fixturePackage = InstrumentationRegistry.getInstrumentation().context.packageName
+        val brokenApp = AppCatalog(context).loadApps().single {
+            it.packageName == fixturePackage && it.activityName.endsWith("ProtectedLauncherActivity")
+        }
         LayoutStore(context).save(completedConfig(listOf(brokenApp.packageName)))
         ActivityScenario.launch(HomeActivity::class.java).use { scenario ->
-            val disableResult = runShell("pm disable-user --user 0 ${brokenApp.packageName}")
-            check("disabled-user" in disableResult) { disableResult }
-            try {
-                onView(withContentDescription(brokenApp.label)).perform(click())
-                onView(withText(context.getString(R.string.unable_to_open, brokenApp.label)))
-                    .check(matches(isDisplayed()))
-                assertEquals(Lifecycle.State.RESUMED, scenario.state)
-            } finally {
-                val enableResult = runShell("pm enable --user 0 ${brokenApp.packageName}")
-                check("enabled" in enableResult) { enableResult }
-            }
+            onView(withContentDescription(brokenApp.label)).perform(click())
+            onView(withText(context.getString(R.string.unable_to_open, brokenApp.label)))
+                .check(matches(isDisplayed()))
+            assertEquals(Lifecycle.State.RESUMED, scenario.state)
         }
     }
 
@@ -1302,11 +1297,4 @@ class HomeAndSettingsFlowTest {
         assertTrue(getGlobalVisibleRect(bounds))
     }
 
-    private fun runShell(command: String): String {
-        val descriptor = InstrumentationRegistry.getInstrumentation()
-            .uiAutomation
-            .executeShellCommand(command)
-        return FileInputStream(descriptor.fileDescriptor).bufferedReader().use { it.readText() }
-            .also { descriptor.close() }
-    }
 }
