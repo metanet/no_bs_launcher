@@ -4,7 +4,11 @@ import dev.basri.android.nobs_launcher.model.HomeItemId
 import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.WebShortcut
 import java.util.concurrent.Executor
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -165,6 +169,42 @@ class WebShortcutServiceTest {
         assertEquals(emptyList<String>(), probe.urls)
         assertEquals(0, store.updateCalls)
         assertEquals(emptyList<SaveShortcutResult>(), results)
+    }
+
+    @Test
+    fun cancelPropagatesToAnActiveProbe() {
+        val started = CountDownLatch(1)
+        val released = CountDownLatch(1)
+        val canceled = AtomicBoolean(false)
+        val executor = Executors.newSingleThreadExecutor()
+        val probe = object : WebsiteProbeGateway {
+            override fun probe(url: String): WebsiteProbeResult = error("cancellable overload expected")
+
+            override fun probe(
+                url: String,
+                cancellation: CancellationRegistration,
+            ): WebsiteProbeResult {
+                cancellation.register {
+                    canceled.set(true)
+                    released.countDown()
+                }
+                started.countDown()
+                released.await(1, TimeUnit.SECONDS)
+                return WebsiteProbeResult.Inaccessible
+            }
+        }
+        val request = service(FakeStore(config()), FakeFavicons(), probe, executor)
+            .save(null, "Site", "example.com", onComplete = {})
+
+        try {
+            assertTrue(started.await(1, TimeUnit.SECONDS))
+            request.cancel()
+            assertTrue(released.await(1, TimeUnit.SECONDS))
+            assertTrue(canceled.get())
+        } finally {
+            released.countDown()
+            executor.shutdownNow()
+        }
     }
 
     @Test

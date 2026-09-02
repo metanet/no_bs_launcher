@@ -34,17 +34,33 @@ class SaveShortcutRequest internal constructor() {
 
     @Volatile
     private var state = State.ACTIVE
+    private var cancelAction: (() -> Unit)? = null
 
     fun cancel() {
-        synchronized(stateLock) {
-            if (state == State.ACTIVE) state = State.CANCELLED
+        val action = synchronized(stateLock) {
+            if (state != State.ACTIVE) return
+            state = State.CANCELLED
+            cancelAction.also { cancelAction = null }
         }
+        runCatching { action?.invoke() }
     }
 
     internal fun isActive(): Boolean = state == State.ACTIVE
 
     internal fun <T : Any> runIfActive(block: () -> T): T? = synchronized(stateLock) {
         if (state == State.ACTIVE) block() else null
+    }
+
+    internal fun registerCancelAction(action: () -> Unit) {
+        val cancelImmediately = synchronized(stateLock) {
+            if (state == State.ACTIVE) {
+                cancelAction = action
+                false
+            } else {
+                true
+            }
+        }
+        if (cancelImmediately) runCatching(action)
     }
 
     internal fun complete(
@@ -56,6 +72,7 @@ class SaveShortcutRequest internal constructor() {
                 false
             } else {
                 state = State.COMPLETED
+                cancelAction = null
                 true
             }
         }
@@ -145,7 +162,10 @@ class WebShortcutService(
         onComplete: (SaveShortcutResult) -> Unit,
     ) {
         if (!request.isActive()) return
-        val probeResult = websiteProbe.probe(validation.url)
+        val probeResult = websiteProbe.probe(
+            validation.url,
+            CancellationRegistration(request::registerCancelAction),
+        )
         if (!request.isActive()) return
         if (probeResult is WebsiteProbeResult.Inaccessible) {
             request.complete(SaveShortcutResult.WebsiteInaccessible, onComplete)

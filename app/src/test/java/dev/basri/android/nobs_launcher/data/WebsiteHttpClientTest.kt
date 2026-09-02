@@ -254,6 +254,24 @@ class WebsiteHttpClientTest {
     }
 
     @Test
+    fun cancellationRegistrationCancelsTheActiveCall() {
+        var cancelActiveCall: () -> Unit = {}
+        val factory = FakeCallFactory { _, call ->
+            cancelActiveCall()
+            assertTrue(call.isCanceled())
+            throw java.io.IOException("canceled")
+        }
+
+        val result = WebsiteHttpClient(callFactory = factory).probe(
+            START_URL,
+            CancellationRegistration { cancelAction -> cancelActiveCall = cancelAction },
+        )
+
+        assertEquals(WebsiteProbeResult.Inaccessible, result)
+        assertTrue(factory.calls.single().isCanceled())
+    }
+
+    @Test
     fun shortCallDeadlineStopsARealLoopbackServerThatNeverResponds() {
         val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
         val accepted = CountDownLatch(1)

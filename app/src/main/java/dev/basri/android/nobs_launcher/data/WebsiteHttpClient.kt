@@ -16,8 +16,14 @@ sealed interface WebsiteProbeResult {
     data object Inaccessible : WebsiteProbeResult
 }
 
+fun interface CancellationRegistration {
+    fun register(cancelAction: () -> Unit)
+}
+
 fun interface WebsiteProbeGateway {
     fun probe(url: String): WebsiteProbeResult
+
+    fun probe(url: String, cancellation: CancellationRegistration): WebsiteProbeResult = probe(url)
 }
 
 internal fun newWebsiteProbeOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
@@ -41,7 +47,12 @@ class WebsiteHttpClient(
     private val monotonicClockMillis: () -> Long = { System.nanoTime() / NANOS_PER_MILLISECOND },
     private val overallTimeoutMillis: Long = DEFAULT_OVERALL_TIMEOUT_MILLIS,
 ) : WebsiteProbeGateway {
-    override fun probe(url: String): WebsiteProbeResult {
+    override fun probe(url: String): WebsiteProbeResult = probe(url, CancellationRegistration {})
+
+    override fun probe(
+        url: String,
+        cancellation: CancellationRegistration,
+    ): WebsiteProbeResult {
         val startedAtMillis = monotonicClockMillis()
         var currentUrl = url.toHttpUrlOrNull() ?: return WebsiteProbeResult.Inaccessible
         val networkAccess = initialNetworkAccess(currentUrl)
@@ -57,6 +68,7 @@ class WebsiteHttpClient(
                     .tag(NetworkAccess::class.java, networkAccess)
                     .build()
                 val call = callFactory.newCall(request)
+                cancellation.register(call::cancel)
                 call.timeout().timeout(
                     remainingTimeoutMillis(startedAtMillis),
                     TimeUnit.MILLISECONDS,
