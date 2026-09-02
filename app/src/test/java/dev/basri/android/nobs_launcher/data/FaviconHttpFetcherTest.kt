@@ -52,7 +52,10 @@ class FaviconHttpFetcherTest {
     fun fetchesExactCandidateWithBoundedGetHeadersAndClosesBody() {
         val body = TrackingResponseBody(byteArrayOf(1, 2, 3), "image/png")
         val factory = FakeCallFactory { request, _ -> response(request, 200, body) }
-        val fetcher = FaviconHttpFetcher(callFactory = factory)
+        val fetcher = FaviconHttpFetcher(
+            callFactory = factory,
+            monotonicClockMillis = { 0L },
+        )
 
         val result = fetcher.fetch("https://cdn.example.com/assets/icon.png?v=2")
 
