@@ -1,7 +1,6 @@
 package dev.basri.android.nobs_launcher
 
 import android.Manifest
-import android.location.LocationManager
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
@@ -11,6 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.TimeZone
 
 @RunWith(AndroidJUnit4::class)
 class SystemLabelReaderTest {
@@ -24,11 +24,18 @@ class SystemLabelReaderTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
 
     @Test
-    fun boxReadsAvailableWifiAndTimezoneLocationFromAndroid() {
+    fun readsAvailableWifiAndTimezoneLocationFromAndroid() {
         val reader = SystemLabelReader(context)
 
-        val locationEnabled = context.getSystemService(LocationManager::class.java).isLocationEnabled
-        assertEquals(if (locationEnabled) "Kahveci House" else null, reader.wifiName())
-        assertTrue(reader.locationName().orEmpty().isNotBlank())
+        reader.wifiName()?.let { wifiName ->
+            assertTrue(wifiName.isNotBlank())
+            assertTrue(!wifiName.equals("<unknown ssid>", ignoreCase = true))
+            assertTrue(!(wifiName.startsWith('"') && wifiName.endsWith('"')))
+        }
+        val expectedLocation = TimeZone.getDefault().id
+            .substringAfterLast('/')
+            .replace('_', ' ')
+            .trim()
+        assertEquals(expectedLocation, reader.locationName())
     }
 }

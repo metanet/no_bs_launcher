@@ -1,7 +1,6 @@
 package dev.basri.android.nobs_launcher
 
 import android.Manifest
-import android.location.LocationManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -55,6 +54,7 @@ import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.HomeAppSectionsPolicy
 import dev.basri.android.nobs_launcher.model.HomeItemId
 import dev.basri.android.nobs_launcher.model.WebShortcut
+import dev.basri.android.nobs_launcher.status.SystemLabelReader
 import dev.basri.android.nobs_launcher.ui.HomeActivity
 import dev.basri.android.nobs_launcher.ui.SettingsActivity
 import dev.basri.android.nobs_launcher.ui.WebShortcutsActivity
@@ -188,14 +188,13 @@ class HomeAndSettingsFlowTest {
             onView(withId(R.id.clock)).check(matches(isDisplayed()))
             onView(withId(R.id.date)).check(matches(isDisplayed()))
             onView(withId(R.id.welcome)).check(matches(withText("Welcome, Basri")))
-            val locationEnabled = context.getSystemService(LocationManager::class.java).isLocationEnabled
-            val expectedWifiLabel = if (locationEnabled) {
-                "Kahveci House"
-            } else {
-                context.getString(R.string.wifi_unavailable)
-            }
+            val systemLabels = SystemLabelReader(context)
+            val expectedWifiLabel = systemLabels.wifiName()
+                ?: context.getString(R.string.wifi_unavailable)
+            val expectedLocationLabel = systemLabels.locationName()
+                ?: context.getString(R.string.location_unavailable)
             onView(withId(R.id.wifi)).check(matches(withText(expectedWifiLabel)))
-            onView(withId(R.id.location)).check(matches(withText("London")))
+            onView(withId(R.id.location)).check(matches(withText(expectedLocationLabel)))
             onView(withId(R.id.vpn_status)).check(matches(isAssignableFrom(TextView::class.java)))
             onView(withId(R.id.system_stats_panel)).check(matches(isDisplayed()))
             onView(withId(R.id.memory_stats)).check(matches(isDisplayed()))

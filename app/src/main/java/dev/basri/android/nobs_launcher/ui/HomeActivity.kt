@@ -34,6 +34,7 @@ class HomeActivity : Activity() {
     private lateinit var store: LayoutStore
     private lateinit var catalog: AppCatalog
     private lateinit var adapter: AppGridAdapter
+    private lateinit var favicons: FaviconRepository
     private lateinit var shortcutService: WebShortcutService
     private lateinit var clockController: ClockController
     private lateinit var vpnStatusMonitor: VpnStatusMonitor
@@ -57,7 +58,7 @@ class HomeActivity : Activity() {
         store = LayoutStore(this)
         systemLabelReader = SystemLabelReader(this)
         catalog = AppCatalog(this)
-        val favicons = FaviconRepository(this)
+        favicons = FaviconRepository(this)
         shortcutService = WebShortcutService(store, favicons)
         adapter = AppGridAdapter(
             favicons = favicons,
@@ -111,6 +112,11 @@ class HomeActivity : Activity() {
         vpnStatusMonitor.stop()
         clockController.stop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        favicons.close()
+        super.onDestroy()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

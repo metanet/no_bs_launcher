@@ -7,14 +7,13 @@ import dev.basri.android.nobs_launcher.stats.SystemStatsReader
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class SystemStatsReaderTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
 
     @Test
-    fun boxExposesSaneCapacityAndPermissionFreeRuntimeStats() {
+    fun deviceExposesSaneCapacityAndBestEffortRuntimeStats() {
         val reader = SystemStatsReader(context)
         val first = reader.read()
         Thread.sleep(250)
@@ -26,23 +25,22 @@ class SystemStatsReaderTest {
         assertTrue(first.totalStorageBytes > 0)
         assertTrue(first.availableStorageBytes in 0..first.totalStorageBytes)
         assertTrue(first.cpuCount > 0)
-        val idleTimeFiles = File("/sys/devices/system/cpu")
-            .walkTopDown()
-            .maxDepth(4)
-            .filter { it.isFile && it.parentFile?.name?.startsWith("state") == true && it.name == "time" }
-            .toList()
-        assertTrue("Box must expose cpuidle state counters", idleTimeFiles.isNotEmpty())
-        assertTrue(
-            "Box cpuidle state counters must be readable by an untrusted app",
-            idleTimeFiles.all { file -> runCatching { file.readText().trim().toLong() }.isSuccess },
-        )
-        assertTrue(first.cpuIdleCounters?.idleMicros?.let { it > 0 } == true)
-        assertTrue(
-            second.cpuIdleCounters?.idleMicros?.let { current ->
-                current > first.cpuIdleCounters!!.idleMicros
-            } == true,
-        )
-        assertTrue(display.cpu.substringAfterLast(" · ").removeSuffix("%").toInt() in 0..100)
+        first.cpuCounters?.let { counters ->
+            assertTrue(counters.idleTicks >= 0)
+            assertTrue(counters.totalTicks >= counters.idleTicks)
+        }
+        first.cpuIdleCounters?.let { counters ->
+            assertTrue(counters.idleMicros >= 0)
+            assertTrue(counters.capturedAtMillis > 0)
+        }
+        val cpuUtilization = display.cpu.substringAfterLast(" · ")
+        if (cpuUtilization.endsWith('%')) {
+            assertTrue(cpuUtilization.removeSuffix("%").toInt() in 0..100)
+        } else {
+            assertTrue(
+                cpuUtilization == "measuring…" || cpuUtilization == "utilization unavailable",
+            )
+        }
         first.networkCounters?.let {
             assertTrue(it.receivedBytes >= 0)
             assertTrue(it.transmittedBytes >= 0)

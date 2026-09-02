@@ -24,6 +24,7 @@ class WebShortcutsActivity : Activity() {
     private lateinit var binding: ActivityWebShortcutsBinding
     private lateinit var store: LayoutStore
     private lateinit var adapter: WebShortcutsAdapter
+    private lateinit var favicons: FaviconRepository
     private lateinit var service: WebShortcutService
     private var activeSaveRequest: SaveShortcutRequest? = null
 
@@ -34,7 +35,7 @@ class WebShortcutsActivity : Activity() {
         setContentView(binding.root)
 
         store = LayoutStore(this)
-        val favicons = FaviconRepository(this)
+        favicons = FaviconRepository(this)
         service = WebShortcutService(store, favicons)
         adapter = WebShortcutsAdapter(
             favicons = favicons,
@@ -70,6 +71,7 @@ class WebShortcutsActivity : Activity() {
     override fun onDestroy() {
         activeSaveRequest?.cancel()
         activeSaveRequest = null
+        favicons.close()
         super.onDestroy()
     }
 

@@ -10,6 +10,7 @@ import dev.basri.android.nobs_launcher.model.WebShortcut
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,6 +24,20 @@ import org.junit.runner.RunWith
 class FaviconRepositoryTest {
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
     private val repository = FaviconRepository(context)
+
+    @Test
+    fun closeShutsDownTheOwnedExecutor() {
+        val executor = Executors.newSingleThreadExecutor()
+        val candidateRepository = FaviconRepository(
+            context = context,
+            executor = executor,
+        )
+
+        candidateRepository.close()
+        candidateRepository.close()
+
+        assertTrue(executor.isShutdown)
+    }
 
     @After
     fun cleanFiles() {

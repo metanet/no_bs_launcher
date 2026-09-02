@@ -65,7 +65,7 @@ class FaviconHttpFetcherTest {
         assertEquals("https://cdn.example.com/assets/icon.png?v=2", request.url.toString())
         assertEquals("GET", request.method)
         assertEquals("image/*", request.header("Accept"))
-        assertEquals("NoBullshitLauncher/0.3", request.header("User-Agent"))
+        assertEquals("NoBullshitLauncher/0.4.1", request.header("User-Agent"))
         assertNull(request.header("Cookie"))
         assertNull(request.header("Authorization"))
         assertEquals(4_000L, TimeUnit.NANOSECONDS.toMillis(call.timeout().timeoutNanos()))

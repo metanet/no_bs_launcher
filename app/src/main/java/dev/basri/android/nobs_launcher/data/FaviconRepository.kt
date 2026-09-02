@@ -9,6 +9,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -16,7 +17,7 @@ class FaviconRepository(
     context: Context,
     private val fetcher: FaviconBytesFetcher = FaviconHttpFetcher(),
     private val executor: Executor = Executors.newSingleThreadExecutor(),
-) : FaviconGateway {
+) : FaviconGateway, AutoCloseable {
     private val directory = File(context.applicationContext.filesDir, DIRECTORY_NAME)
 
     /**
@@ -96,6 +97,10 @@ class FaviconRepository(
     override fun delete(fileName: String) {
         safeFile(fileName)?.delete()
         safeFile("$fileName.tmp")?.delete()
+    }
+
+    override fun close() {
+        (executor as? ExecutorService)?.shutdownNow()
     }
 
     private fun scaleDown(source: Bitmap): Bitmap {

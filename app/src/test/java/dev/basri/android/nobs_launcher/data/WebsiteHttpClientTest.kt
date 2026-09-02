@@ -148,7 +148,7 @@ class WebsiteHttpClientTest {
         val request = factory.calls.single().request()
         assertEquals("GET", request.method)
         assertEquals("text/html, application/xhtml+xml", request.header("Accept"))
-        assertEquals("NoBullshitLauncher/0.3", request.header("User-Agent"))
+        assertEquals("NoBullshitLauncher/0.4.1", request.header("User-Agent"))
         assertNull(request.header("Cookie"))
         assertNull(request.header("Authorization"))
     }

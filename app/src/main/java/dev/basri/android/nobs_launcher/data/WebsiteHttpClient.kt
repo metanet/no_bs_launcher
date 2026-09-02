@@ -132,7 +132,7 @@ class WebsiteHttpClient(
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403
         const val ACCEPT_HEADER = "text/html, application/xhtml+xml"
-        const val USER_AGENT = "NoBullshitLauncher/0.3"
+        const val USER_AGENT = "NoBullshitLauncher/0.4.1"
     }
 }
 
