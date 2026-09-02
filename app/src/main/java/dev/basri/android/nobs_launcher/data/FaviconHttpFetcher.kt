@@ -112,7 +112,7 @@ class FaviconHttpFetcher(
         const val BUFFER_SIZE = 8 * 1024
         const val NANOS_PER_MILLISECOND = 1_000_000L
         const val ACCEPT_HEADER = "image/*"
-        const val USER_AGENT = "NoBullshitLauncher/0.4.1"
+        const val USER_AGENT = "Mozilla/5.0 (Linux; Android)"
     }
 }
 
