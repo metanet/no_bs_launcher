@@ -63,30 +63,35 @@ class LayoutStore(context: Context) : LauncherConfigStore {
         return config
     }
 
-    private fun saveUnlocked(config: LauncherConfig): Boolean = preferences.edit()
-        .putBoolean(KEY_FIRST_RUN_COMPLETE, config.firstRunComplete)
-        .putString(KEY_FAVORITE_ITEM_IDS, HomeItemIdCodec.encode(config.favoriteItemIds))
-        .putString(KEY_WEB_SHORTCUTS, WebShortcutCodec.encode(config.shortcuts))
-        .putString(KEY_WELCOME_TEXT, config.welcomeText.trim())
-        .putBoolean(KEY_SHOW_WIFI_NAME, config.showWifiName)
-        .putBoolean(KEY_SHOW_LOCATION, config.showLocation)
-        .putBoolean(KEY_SHOW_VPN_STATUS, config.showVpnStatus)
-        .putBoolean(KEY_SHOW_SYSTEM_STATS, config.showSystemStats)
-        .remove(KEY_WIFI_LABEL)
-        .remove(KEY_LOCATION_LABEL)
-        .remove(KEY_SELECTED_PACKAGES)
-        .commit()
+    private fun saveUnlocked(config: LauncherConfig): Boolean {
+        preferences.edit()
+            .putBoolean(KEY_FIRST_RUN_COMPLETE, config.firstRunComplete)
+            .putString(KEY_FAVORITE_ITEM_IDS, HomeItemIdCodec.encode(config.favoriteItemIds))
+            .putString(KEY_WEB_SHORTCUTS, WebShortcutCodec.encode(config.shortcuts))
+            .putString(KEY_WELCOME_TEXT, config.welcomeText.trim())
+            .putBoolean(KEY_SHOW_WIFI_NAME, config.showWifiName)
+            .putBoolean(KEY_SHOW_LOCATION, config.showLocation)
+            .putBoolean(KEY_SHOW_VPN_STATUS, config.showVpnStatus)
+            .putBoolean(KEY_SHOW_SYSTEM_STATS, config.showSystemStats)
+            .remove(KEY_WIFI_LABEL)
+            .remove(KEY_LOCATION_LABEL)
+            .remove(KEY_SELECTED_PACKAGES)
+            .apply()
+        return true
+    }
 
     fun hasRequestedWifiPermission(): Boolean = synchronized(PROCESS_LOCK) {
         preferences.getBoolean(KEY_WIFI_PERMISSION_REQUESTED, false)
     }
 
     fun markWifiPermissionRequested(): Boolean = synchronized(PROCESS_LOCK) {
-        preferences.edit().putBoolean(KEY_WIFI_PERMISSION_REQUESTED, true).commit()
+        preferences.edit().putBoolean(KEY_WIFI_PERMISSION_REQUESTED, true).apply()
+        true
     }
 
     fun clear(): Boolean = synchronized(PROCESS_LOCK) {
-        preferences.edit().clear().commit()
+        preferences.edit().clear().apply()
+        true
     }
 
     companion object {
