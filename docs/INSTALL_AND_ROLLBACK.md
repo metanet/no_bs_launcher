@@ -37,6 +37,16 @@ other launchable apps and web shortcuts, which are sorted alphabetically.
 Uninstall app opens Android's own confirmation screen; the launcher cannot
 silently remove an application.
 
+## Settings quick actions and build identity
+
+Web shortcuts, Android settings, Build info, and Save stay in the top Settings
+row, with left/right remote navigation between them. Build info opens a dialog
+whose separate left-aligned lines report the short Git revision (`-dirty` when
+applicable) and UTC build date. CPU utilization is the final value on the Home
+CPU row, matching the percentage placement used by Memory and Storage. Network
+ingress and egress use separate one-line rows so changing rates cannot wrap the
+left panel.
+
 ## Web shortcuts
 
 Open Settings, then **Web shortcuts**, to add, edit, or remove a named HTTP(S)
@@ -65,9 +75,14 @@ a shortcut, never by page JavaScript, a WebView, or a background refresh.
 
 ## First launch and Home selection
 
-Open No bullshit launcher once, enter the welcome, Wi-Fi, and location labels,
-choose the optional panels and apps to show, and select Save. Android can then
-be asked to make it Home:
+Open No bullshit launcher once, enter the optional welcome text, choose which
+system labels and panels to show, select favorite apps, and select Save. Wi-Fi
+is read from Android rather than typed into Settings. Android treats the SSID as
+location-sensitive, so approve the one-time location permission and keep the
+device's Location service enabled if the Wi-Fi name should be visible. The
+displayed location is the final component of the system timezone (for example,
+`Europe/London` displays `London`); it is not a GPS lookup. Android can then be
+asked to make the app Home:
 
 ```bash
 adb -s 192.168.1.154:5555 shell cmd package set-home-activity --user 0 \
@@ -123,19 +138,24 @@ Do not uninstall either launcher to switch between them.
 ## Verified release
 
 - APK: `app/build/outputs/apk/release/app-release.apk`
-- Size: 464,601 bytes
-- Version: `0.3.3` (`versionCode=7`)
+- Size: 469,530 bytes
+- Version: `0.4.1` (`versionCode=9`)
 - APK SHA-256:
-  `8ada6710295ede46006728c0f211c902772a27aee708c4853ab665236885f26a`
+  `ac9d517fad86f97e493b4977ec2bebd8ede0dccc0b2a2c7208574fb2b460bc45`
+- Embedded build identity: `ebf7b4e31116-dirty`, `2026-09-02 22:05 UTC`
 - Minimum Android: 6.0 / API 23
 - Signing certificate SHA-256:
   `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`
 
 ## Privacy boundary
 
-The release requests only `android.permission.ACCESS_NETWORK_STATE`,
-`android.permission.INTERNET`, and
-`android.permission.REQUEST_DELETE_PACKAGES`. Internet access is used only for
+The release requests `android.permission.ACCESS_COARSE_LOCATION`,
+`android.permission.ACCESS_FINE_LOCATION`,
+`android.permission.ACCESS_NETWORK_STATE`, `android.permission.ACCESS_WIFI_STATE`,
+`android.permission.INTERNET`, and `android.permission.REQUEST_DELETE_PACKAGES`.
+Fine location and Wi-Fi state are used only to ask Android for the connected
+SSID; the launcher performs no Wi-Fi scan, GPS lookup, or background location
+access. Internet access is used only for
 the user-triggered website check and favicon requests described above. Runtime
 HTTP uses OkHttp `5.4.0`. Requests use no cookies, HTTP authentication,
 proxy authentication, or response cache. There is no page JavaScript, WebView,
@@ -147,10 +167,11 @@ HTTPS are the only schemes; cleartext HTTP is deliberately permitted for
 user-configured HTTP destinations, their icon URLs, and any HTTP redirect
 targets reached from HTTP or HTTPS initial requests.
 
-The launcher has no location, analytics, notification-listener, accessibility,
-or broad package-query permission. Labels, URLs, favorites, and favicon files
-remain in app-private local storage with Android backup and device transfer
-disabled.
+The launcher has no background-location, analytics, notification-listener,
+accessibility, or broad package-query permission. The welcome text, visibility
+settings, URLs, favorites, and favicon files remain in app-private local storage
+with Android backup and device transfer disabled. Wi-Fi and timezone-derived
+location labels are not user-editable or persisted.
 
 VPN status is provider-neutral. The launcher displays `VPN connected` whenever
 Android reports an active VPN transport and the panel is enabled. It does not

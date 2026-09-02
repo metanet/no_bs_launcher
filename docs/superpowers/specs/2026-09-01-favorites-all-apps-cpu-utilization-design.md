@@ -86,9 +86,9 @@ The separator and remaining apps never move and cannot enter move mode.
 
 ## CPU utilization
 
-The left system panel continues to show one compact CPU row containing
-utilization, logical core count, and maximum frequency. Utilization is sampled
-with the existing two-second lifecycle-bound monitor.
+The left system panel continues to show one compact CPU row containing logical
+core count, maximum frequency, and utilization at the right-hand end.
+Utilization is sampled with the existing two-second lifecycle-bound monitor.
 
 The reader tries two provider-neutral whole-system sources in order:
 

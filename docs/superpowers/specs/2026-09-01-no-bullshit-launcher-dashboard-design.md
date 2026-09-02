@@ -23,7 +23,7 @@ Three approaches were considered:
 
 ## Home composition
 
-The existing 30/70 layout remains. The right side keeps the four-column,
+The current 20/80 layout remains. The right side keeps the four-column,
 manually ordered app grid. `Manage apps` becomes `Settings`.
 
 The left panel is ordered as follows:
@@ -38,32 +38,31 @@ London                  (optional)
 VPN connected           (optional and only while active)
 
 Memory   1.2 / 2.0 GB   60%       (optional system panel)
-CPU      43% · 4 cores · 1.8 GHz
+CPU      4 cores · 1.8 GHz           43%
 Storage  4.3 / 8.0 GB   54%
-Network  ↓ 1.2 MB/s · ↑ 96 KB/s
+Ingress  ↓ 1.2 MB/s
+Egress   ↑ 96 KB/s
 ```
 
-Wi-Fi remains visible because Basri explicitly requested it in the approved
-launcher design. The location line, generic VPN line, and complete system panel
-can each be enabled or disabled independently. The welcome line is hidden when
-blank. Long welcome text is constrained to two lines and ellipsized so it
-cannot displace the clock or app grid.
+Wi-Fi is read from Android's current connection and location is derived locally
+from the configured timezone. Neither value is editable or persisted. Wi-Fi,
+location, the generic VPN line, and the complete system panel can each be
+enabled or disabled independently. The welcome line is hidden when blank. Long
+welcome text is constrained to two lines and ellipsized so it cannot displace
+the clock or app grid.
 
 ## Settings behavior
 
-The Settings screen contains, in remote focus order:
+The Settings header contains Web shortcuts, Android settings, Build info, and
+Save in left-to-right remote focus order. The form contains the welcome text,
+`Show Wi-Fi name`, `Show location`, `Show VPN status`, and `Show system stats`
+checkboxes, followed by the favorite-app list. Build info opens a left-aligned
+two-line dialog instead of consuming permanent Settings space.
 
-1. Welcome text.
-2. Wi-Fi name.
-3. Location.
-4. `Show location`, `Show VPN status`, and `Show system stats` checkboxes.
-5. The selectable installed-app list.
-6. Android Settings and Save buttons.
-
-New installations default all three visibility switches to enabled and all
-apps to hidden. Save atomically persists labels, switches, and selected app
-order. Back is blocked during first-run setup; on later visits Back discards
-the entire working copy. Newly installed apps remain unchecked.
+New installations default all four visibility switches to enabled and all apps
+to hidden. Save atomically persists the welcome text, switches, and selected app
+order. Back is blocked during first-run setup; on later visits Back discards the
+entire working copy. Newly installed apps remain unchecked.
 
 ## Generic VPN status
 
@@ -84,7 +83,8 @@ samples every two seconds only while the system panel is enabled.
   frequency from standard `/sys/devices/system/cpu` entries. Whole-system CPU
   use is calculated from deltas in `/proc/stat` when Android permits access.
 - Network ingress/egress are rates calculated from deltas in
-  `TrafficStats.getTotalRxBytes()` and `getTotalTxBytes()`.
+  `TrafficStats.getTotalRxBytes()` and `getTotalTxBytes()` and rendered in two
+  independent single-line rows.
 
 Every metric is best-effort and permission-free. Unsupported or inaccessible
 values render as `unavailable`; the launcher never substitutes app-process CPU
@@ -95,13 +95,15 @@ per-monitor snapshots and has no shared mutable global state.
 
 ## Privacy and resource boundaries
 
-The only production permission remains
-`android.permission.ACCESS_NETWORK_STATE`. The NordVPN package query is
-removed. There is no Internet, location, usage-stats, notification-listener,
+The NordVPN package query remains removed. Reading the connected SSID uses only
+`ACCESS_WIFI_STATE` and the foreground coarse/fine location permission pair
+Android requires when requesting access to this location-sensitive field;
+there is no network scan,
+GPS lookup, or background location. Website shortcuts use Internet access as
+documented separately. There is no usage-stats, notification-listener,
 accessibility, storage, or broad package-query permission. Settings remain in
-private preferences with backup and device transfer disabled. The monitor
-stops all callbacks when Home is stopped and performs file reads off the main
-thread.
+private preferences with backup and device transfer disabled. The monitor stops
+all callbacks when Home is stopped and performs file reads off the main thread.
 
 ## Failure behavior
 
