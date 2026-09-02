@@ -78,6 +78,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(libs.okhttp)
     implementation(libs.recyclerview)
 
     testImplementation(libs.junit)

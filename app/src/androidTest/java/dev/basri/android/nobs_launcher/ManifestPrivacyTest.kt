@@ -56,6 +56,13 @@ class ManifestPrivacyTest {
     }
 
     @Test
+    fun cleartextTrafficIsEnabledForUserConfiguredHttpShortcuts() {
+        @Suppress("DEPRECATION")
+        val applicationInfo = packageManager.getApplicationInfo(context.packageName, 0)
+        assertTrue(applicationInfo.flags and ApplicationInfo.FLAG_USES_CLEARTEXT_TRAFFIC != 0)
+    }
+
+    @Test
     fun packageIdentityAndHomeIntentUseNoBullshitLauncher() {
         assertEquals("dev.basri.android.nobs_launcher.debug", context.packageName)
         assertEquals(
