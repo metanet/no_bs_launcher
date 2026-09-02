@@ -181,7 +181,8 @@ clearing launcher state, and package version 0.4.1 remains installed. Launch Hom
 and Settings, verify that Wi-Fi is absent while Android Location is disabled, and
 verify the four settings buttons and D-pad focus order.
 
-- [x] **Step 4: Leave the branch uncommitted**
+- [x] **Step 4: Pause for an explicit integration decision**
 
 Report the changed files, exact verification evidence, and worktree location. Do
-not commit or merge until Basri explicitly authorizes it.
+not commit or merge until Basri explicitly authorizes it. Basri subsequently chose
+the local-merge option, authorizing the required commits and integration.

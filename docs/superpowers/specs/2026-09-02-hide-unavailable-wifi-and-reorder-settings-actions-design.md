@@ -40,5 +40,5 @@ before completion.
 
 ## Source control
 
-Implementation and this specification remain uncommitted until Basri explicitly
-authorizes a commit.
+Basri authorized the reviewed implementation commits and local merge after the
+verified worktree handoff.
