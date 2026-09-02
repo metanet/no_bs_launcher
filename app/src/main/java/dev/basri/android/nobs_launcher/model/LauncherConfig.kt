@@ -53,16 +53,12 @@ object LauncherConfigPolicy {
         }
     }
 
-    fun normalize(
-        config: LauncherConfig,
-        installedPackages: Set<String>,
-    ): LauncherConfig {
-        val installedAppIds = installedPackages.mapTo(mutableSetOf(), HomeItemId::app)
+    fun normalize(config: LauncherConfig): LauncherConfig {
         val shortcutIds = config.shortcuts.mapTo(mutableSetOf(), WebShortcut::itemId)
         return config.copy(
             favoriteItemIds = config.favoriteItemIds
                 .distinct()
-                .filter { itemId -> itemId in installedAppIds || itemId in shortcutIds },
+                .filter { itemId -> HomeItemId.appPackage(itemId) != null || itemId in shortcutIds },
             shortcuts = config.shortcuts.distinctBy(WebShortcut::uuid),
         )
     }

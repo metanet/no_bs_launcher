@@ -166,12 +166,11 @@ class HomeActivity : Activity() {
 
     private fun bindHome(preferredFocusItemId: String? = currentFocusedItemId()) {
         val catalogApps = catalog.loadApps()
-        val installedPackages = catalogApps.mapTo(mutableSetOf(), AppCandidate::packageName)
         var normalized: LauncherConfig? = null
         store.update { current ->
-            LauncherConfigPolicy.normalize(current, installedPackages).also { normalized = it }
+            LauncherConfigPolicy.normalize(current).also { normalized = it }
         }
-        val currentConfig = normalized ?: LauncherConfigPolicy.normalize(store.load(), installedPackages)
+        val currentConfig = normalized ?: LauncherConfigPolicy.normalize(store.load())
 
         val allItems = catalogApps.map(HomeItem::App) + currentConfig.shortcuts.map(HomeItem::Web)
         val sections = HomeItemSectionsPolicy.compose(allItems, currentConfig.favoriteItemIds)

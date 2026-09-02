@@ -28,16 +28,25 @@ class LauncherConfigPolicyTest {
     }
 
     @Test
-    fun normalizeDropsDuplicatesMissingAppsAndOrphanedShortcuts() {
+    fun normalizePreservesUnavailableAppsAndDropsOrphanedShortcuts() {
         val initial = config(
             favorites = listOf(APP_YOUTUBE, WEB_ONE, WEB_MISSING, APP_GONE, WEB_ONE),
             shortcuts = listOf(shortcut(UUID_ONE), shortcut(UUID_TWO)),
         )
 
-        val normalized = LauncherConfigPolicy.normalize(initial, setOf("app.youtube"))
+        val normalized = LauncherConfigPolicy.normalize(initial)
 
-        assertEquals(listOf(APP_YOUTUBE, WEB_ONE), normalized.favoriteItemIds)
+        assertEquals(listOf(APP_YOUTUBE, WEB_ONE, APP_GONE), normalized.favoriteItemIds)
         assertEquals(initial.shortcuts, normalized.shortcuts)
+    }
+
+    @Test
+    fun normalizePreservesAppFavoritesWhenCatalogIsTemporarilyEmpty() {
+        val initial = config(favorites = listOf(APP_YOUTUBE, APP_NETFLIX))
+
+        val normalized = LauncherConfigPolicy.normalize(initial)
+
+        assertEquals(initial.favoriteItemIds, normalized.favoriteItemIds)
     }
 
     @Test
