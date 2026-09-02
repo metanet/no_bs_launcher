@@ -139,15 +139,15 @@ class HomeAndSettingsFlowTest {
                 }
             onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
             scenario.onActivity { settings ->
-                assertTrue(settings.findViewById<View>(R.id.web_shortcuts).requestFocusFromTouch())
+                assertTrue(settings.findViewById<View>(R.id.save).requestFocusFromTouch())
             }
+            onView(withId(R.id.save)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
             onView(withId(R.id.web_shortcuts)).check(matches(hasFocus()))
             sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
             onView(withId(R.id.open_android_settings)).check(matches(hasFocus()))
             sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
             onView(withId(R.id.build_info)).check(matches(hasFocus()))
-            sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
-            onView(withId(R.id.save)).check(matches(hasFocus()))
 
             scenario.onActivity { settings ->
                 val webShortcuts = settings.findViewById<View>(R.id.web_shortcuts)
@@ -164,12 +164,19 @@ class HomeAndSettingsFlowTest {
 
                 assertEquals(1, topPositions.distinct().size)
                 assertTrue(topPositions.first() < appList.screenBounds().top)
+                assertTrue(save.screenBounds().left < webShortcuts.screenBounds().left)
+                assertTrue(webShortcuts.screenBounds().left < androidSettings.screenBounds().left)
+                assertTrue(androidSettings.screenBounds().left < buildInfo.screenBounds().left)
+                assertEquals(R.id.web_shortcuts, save.nextFocusRightId)
+                assertEquals(R.id.save, webShortcuts.nextFocusLeftId)
                 assertEquals(R.id.open_android_settings, webShortcuts.nextFocusRightId)
                 assertEquals(R.id.web_shortcuts, androidSettings.nextFocusLeftId)
                 assertEquals(R.id.build_info, androidSettings.nextFocusRightId)
                 assertEquals(R.id.open_android_settings, buildInfo.nextFocusLeftId)
-                assertEquals(R.id.save, buildInfo.nextFocusRightId)
-                assertEquals(R.id.build_info, save.nextFocusLeftId)
+                assertEquals(
+                    R.id.save,
+                    settings.findViewById<View>(R.id.welcome_text).nextFocusUpId,
+                )
             }
         }
     }
@@ -189,11 +196,16 @@ class HomeAndSettingsFlowTest {
             onView(withId(R.id.date)).check(matches(isDisplayed()))
             onView(withId(R.id.welcome)).check(matches(withText("Welcome, Basri")))
             val systemLabels = SystemLabelReader(context)
-            val expectedWifiLabel = systemLabels.wifiName()
-                ?: context.getString(R.string.wifi_unavailable)
+            val wifiName = systemLabels.wifiName()
             val expectedLocationLabel = systemLabels.locationName()
                 ?: context.getString(R.string.location_unavailable)
-            onView(withId(R.id.wifi)).check(matches(withText(expectedWifiLabel)))
+            if (wifiName == null) {
+                onView(withId(R.id.wifi)).check(matches(withEffectiveVisibility(GONE)))
+            } else {
+                onView(withId(R.id.wifi))
+                    .check(matches(isDisplayed()))
+                    .check(matches(withText(wifiName)))
+            }
             onView(withId(R.id.location)).check(matches(withText(expectedLocationLabel)))
             onView(withId(R.id.vpn_status)).check(matches(isAssignableFrom(TextView::class.java)))
             onView(withId(R.id.system_stats_panel)).check(matches(isDisplayed()))

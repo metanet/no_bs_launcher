@@ -25,11 +25,25 @@
             android:textStyle="bold" />
 
         <Button
-            android:id="@+id/web_shortcuts"
+            android:id="@+id/save"
             android:layout_width="wrap_content"
             android:layout_height="56dp"
             android:background="@drawable/tile_selector"
             android:nextFocusDown="@+id/welcome_text"
+            android:nextFocusRight="@+id/web_shortcuts"
+            android:paddingHorizontal="28dp"
+            android:text="@string/save"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
+
+        <Button
+            android:id="@+id/web_shortcuts"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginStart="18dp"
+            android:background="@drawable/tile_selector"
+            android:nextFocusDown="@id/welcome_text"
+            android:nextFocusLeft="@id/save"
             android:nextFocusRight="@id/open_android_settings"
             android:paddingHorizontal="20dp"
             android:text="@string/web_shortcuts"
@@ -58,22 +72,8 @@
             android:background="@drawable/tile_selector"
             android:nextFocusDown="@id/welcome_text"
             android:nextFocusLeft="@id/open_android_settings"
-            android:nextFocusRight="@+id/save"
             android:paddingHorizontal="20dp"
             android:text="@string/build_info"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
-
-        <Button
-            android:id="@+id/save"
-            android:layout_width="wrap_content"
-            android:layout_height="56dp"
-            android:layout_marginStart="18dp"
-            android:background="@drawable/tile_selector"
-            android:nextFocusDown="@id/welcome_text"
-            android:nextFocusLeft="@id/build_info"
-            android:paddingHorizontal="28dp"
-            android:text="@string/save"
             android:textAllCaps="false"
             android:textColor="@color/text_primary" />
     </LinearLayout>
@@ -92,7 +92,7 @@
         android:singleLine="true"
         android:textColor="@color/text_primary"
         android:textColorHint="@color/text_secondary"
-        android:nextFocusUp="@id/web_shortcuts" />
+        android:nextFocusUp="@id/save" />
 
     <LinearLayout
         android:layout_width="match_parent"

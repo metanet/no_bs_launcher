@@ -180,8 +180,13 @@ class HomeActivity : Activity() {
         binding.emptyState.visibility = if (allItems.isEmpty()) View.VISIBLE else View.GONE
         binding.welcome.text = currentConfig.welcomeText
         binding.welcome.visibility = if (currentConfig.welcomeText.isBlank()) View.GONE else View.VISIBLE
-        binding.wifi.text = systemLabelReader.wifiName() ?: getString(R.string.wifi_unavailable)
-        binding.wifi.visibility = if (currentConfig.showWifiName) View.VISIBLE else View.GONE
+        val wifiName = systemLabelReader.wifiName()
+        binding.wifi.text = wifiName.orEmpty()
+        binding.wifi.visibility = if (currentConfig.showWifiName && wifiName != null) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
         binding.location.text = systemLabelReader.locationName()
             ?: getString(R.string.location_unavailable)
         binding.location.visibility = if (currentConfig.showLocation) View.VISIBLE else View.GONE
