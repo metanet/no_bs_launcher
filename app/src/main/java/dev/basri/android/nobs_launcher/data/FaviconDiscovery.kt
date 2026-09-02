@@ -209,7 +209,10 @@ object FaviconDiscovery {
 
     private fun resolveHttpUri(base: URI, href: String): String? = runCatching {
         base.resolve(href)
-    }.getOrNull()?.takeIf(::isHttpUri)?.toASCIIString()
+    }.getOrNull()
+        ?.takeIf(::isHttpUri)
+        ?.takeIf { resolved -> sameOrigin(base, resolved) }
+        ?.toASCIIString()
 
     private fun parseHttpUri(value: String): URI? = runCatching { URI(value) }
         .getOrNull()
@@ -217,6 +220,17 @@ object FaviconDiscovery {
 
     private fun isHttpUri(uri: URI): Boolean =
         uri.scheme?.lowercase(Locale.ROOT) in ALLOWED_SCHEMES && !uri.host.isNullOrBlank()
+
+    private fun sameOrigin(first: URI, second: URI): Boolean =
+        first.scheme.equals(second.scheme, ignoreCase = true) &&
+            first.host.equals(second.host, ignoreCase = true) &&
+            effectivePort(first) == effectivePort(second)
+
+    private fun effectivePort(uri: URI): Int = when {
+        uri.port >= 0 -> uri.port
+        uri.scheme.equals("https", ignoreCase = true) -> 443
+        else -> 80
+    }
 
     private fun originFavicon(pageUri: URI): String? = runCatching {
         URI(pageUri.scheme, null, pageUri.host, pageUri.port, "/favicon.ico", null, null)

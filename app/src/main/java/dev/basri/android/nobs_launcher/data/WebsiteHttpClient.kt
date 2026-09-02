@@ -31,6 +31,7 @@ internal fun newWebsiteProbeOkHttpClient(): OkHttpClient = OkHttpClient.Builder(
     .connectTimeout(PER_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
     .readTimeout(PER_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
     .callTimeout(DEFAULT_OVERALL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+    .rejectUnexpectedPrivatePeers()
     .build()
 
 private val WEBSITE_PROBE_HTTP_CLIENT: OkHttpClient by lazy(::newWebsiteProbeOkHttpClient)
@@ -43,6 +44,7 @@ class WebsiteHttpClient(
     override fun probe(url: String): WebsiteProbeResult {
         val startedAtMillis = monotonicClockMillis()
         var currentUrl = url.toHttpUrlOrNull() ?: return WebsiteProbeResult.Inaccessible
+        val networkAccess = initialNetworkAccess(currentUrl)
         var redirects = 0
 
         while (true) {
@@ -52,6 +54,7 @@ class WebsiteHttpClient(
                     .head()
                     .header("Accept", ACCEPT_HEADER)
                     .header("User-Agent", USER_AGENT)
+                    .tag(NetworkAccess::class.java, networkAccess)
                     .build()
                 val call = callFactory.newCall(request)
                 call.timeout().timeout(
@@ -66,7 +69,9 @@ class WebsiteHttpClient(
                         val location = response.header("Location")
                             ?: return WebsiteProbeResult.Inaccessible
                         return@use currentUrl.resolve(location)
-                            ?.takeIf { target -> isAllowedRedirect(currentUrl, target) }
+                            ?.takeIf { target ->
+                                isAllowedRedirect(currentUrl, target, networkAccess)
+                            }
                     }
 
                     if (response.code == HTTP_UNAUTHORIZED || response.code == HTTP_FORBIDDEN) {

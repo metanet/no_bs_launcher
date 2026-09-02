@@ -19,7 +19,6 @@ class FaviconDiscoveryTest {
         assertEquals(
             listOf(
                 "https://example.com/news/icons/first.png",
-                "https://cdn.example.net/shortcut.ico",
                 "https://example.com/apple.png",
                 "https://example.com/apple-precomposed.png",
                 "https://example.com/favicon.ico",
@@ -60,10 +59,21 @@ class FaviconDiscoveryTest {
         """.trimIndent()
 
         assertEquals(
-            listOf(
-                "https://assets.example/icon.png",
-                "https://example.com/favicon.ico",
-            ),
+            listOf("https://example.com/favicon.ico"),
+            FaviconDiscovery.candidates("https://example.com/page", html),
+        )
+    }
+
+    @Test
+    fun ignoresCrossOriginIconsIncludingDifferentPorts() {
+        val html = """
+            <link rel="icon" href="https://cdn.example.com/icon.png">
+            <link rel="icon" href="https://example.com:8443/icon.png">
+            <link rel="icon" href="//example.com/icon.png">
+        """.trimIndent()
+
+        assertEquals(
+            listOf("https://example.com/icon.png", "https://example.com/favicon.ico"),
             FaviconDiscovery.candidates("https://example.com/page", html),
         )
     }

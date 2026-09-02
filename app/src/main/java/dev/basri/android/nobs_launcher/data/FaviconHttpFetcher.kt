@@ -27,6 +27,7 @@ internal fun newFaviconOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
     .connectTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
     .readTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
     .callTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+    .rejectUnexpectedPrivatePeers()
     .build()
 
 private val FAVICON_HTTP_CLIENT: OkHttpClient by lazy(::newFaviconOkHttpClient)
@@ -41,6 +42,7 @@ class FaviconHttpFetcher(
     override fun fetch(iconUrl: String): ByteArray? {
         if (maxBytes <= 0 || maxRedirects < 0 || overallTimeoutMillis <= 0L) return null
         var currentUrl = iconUrl.toHttpUrlOrNull() ?: return null
+        val networkAccess = initialNetworkAccess(currentUrl)
         var redirects = 0
         val startedAtMillis = monotonicClockMillis()
 
@@ -51,6 +53,7 @@ class FaviconHttpFetcher(
                     .get()
                     .header("Accept", ACCEPT_HEADER)
                     .header("User-Agent", USER_AGENT)
+                    .tag(NetworkAccess::class.java, networkAccess)
                     .build()
                 val call = callFactory.newCall(request)
                 call.timeout().timeout(
@@ -64,7 +67,9 @@ class FaviconHttpFetcher(
                         if (redirects >= maxRedirects) return null
                         val location = response.header("Location") ?: return null
                         return@use currentUrl.resolve(location)
-                            ?.takeIf { target -> isAllowedRedirect(currentUrl, target) }
+                            ?.takeIf { target ->
+                                isAllowedRedirect(currentUrl, target, networkAccess)
+                            }
                     }
                     if (response.code !in 200..299) return null
 

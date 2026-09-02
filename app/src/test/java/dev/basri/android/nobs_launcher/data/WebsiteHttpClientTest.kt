@@ -141,6 +141,20 @@ class WebsiteHttpClientTest {
     }
 
     @Test
+    fun publicShortcutRejectsRedirectToPrivateAddress() {
+        val body = TrackingResponseBody("redirect", "text/plain")
+        val factory = FakeCallFactory { request, _ ->
+            response(request, 302, body, mapOf("Location" to "https://127.0.0.1/private"))
+        }
+
+        assertEquals(
+            WebsiteProbeResult.Inaccessible,
+            WebsiteHttpClient(callFactory = factory).probe(START_URL),
+        )
+        assertEquals(1, factory.calls.size)
+    }
+
+    @Test
     fun rejectsMalformedAndNonHttpUrlsWithoutCreatingCalls() {
         val factory = FakeCallFactory { _, _ -> error("must not execute") }
 
@@ -270,6 +284,38 @@ class WebsiteHttpClientTest {
             assertTrue("call exceeded deadline: ${elapsedMillis}ms", elapsedMillis < 1_000L)
         } finally {
             releaseServer.countDown()
+            runCatching { server.close() }
+            serverExecutor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun rejectsDnsRebindingToPrivatePeerBeforeSendingHttp() {
+        val loopback = InetAddress.getByName("127.0.0.1")
+        val server = ServerSocket(0, 1, loopback)
+        val accepted = CountDownLatch(1)
+        val serverExecutor = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "website-probe-rebinding").apply { isDaemon = true }
+        }
+        serverExecutor.execute {
+            try {
+                server.accept().use { accepted.countDown() }
+            } catch (_: Exception) {
+                // Cleanup may close the server if the connection is rejected earlier.
+            }
+        }
+        val client = newWebsiteProbeOkHttpClient().newBuilder()
+            .dns { listOf(loopback) }
+            .build()
+
+        try {
+            assertEquals(
+                WebsiteProbeResult.Inaccessible,
+                WebsiteHttpClient(callFactory = client)
+                    .probe("http://public.example:${server.localPort}/private"),
+            )
+            assertTrue(accepted.await(500, TimeUnit.MILLISECONDS))
+        } finally {
             runCatching { server.close() }
             serverExecutor.shutdownNow()
         }
