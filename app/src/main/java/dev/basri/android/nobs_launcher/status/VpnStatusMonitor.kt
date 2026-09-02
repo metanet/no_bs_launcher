@@ -8,6 +8,11 @@ import android.net.NetworkRequest
 import android.os.Handler
 import android.os.Looper
 
+internal fun buildVpnNetworkRequest(): NetworkRequest = NetworkRequest.Builder()
+    .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+    .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+    .build()
+
 class VpnStatusMonitor(
     context: Context,
     private val onLabelChanged: (String?) -> Unit,
@@ -48,10 +53,7 @@ class VpnStatusMonitor(
     fun start() {
         if (started) return
         started = true
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
-            .build()
-        connectivityManager.registerNetworkCallback(request, callback)
+        connectivityManager.registerNetworkCallback(buildVpnNetworkRequest(), callback)
         publishCurrentState()
     }
 
