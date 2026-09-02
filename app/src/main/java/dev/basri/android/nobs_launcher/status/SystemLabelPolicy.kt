@@ -1,6 +1,9 @@
 package dev.basri.android.nobs_launcher.status
 
 object SystemLabelPolicy {
+    fun visibleWifiName(showWifiName: Boolean, wifiName: String?): String? =
+        wifiName?.takeIf { showWifiName && it.isNotBlank() }
+
     fun normalizeWifiSsid(value: String?): String? {
         val trimmed = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
         if (trimmed.equals(UNKNOWN_SSID, ignoreCase = true)) return null

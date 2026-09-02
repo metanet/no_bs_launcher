@@ -25,8 +25,9 @@ import dev.basri.android.nobs_launcher.model.LauncherConfigPolicy
 import dev.basri.android.nobs_launcher.model.WebShortcut
 import dev.basri.android.nobs_launcher.stats.SystemStatsDisplay
 import dev.basri.android.nobs_launcher.stats.SystemStatsMonitor
-import dev.basri.android.nobs_launcher.status.VpnStatusMonitor
+import dev.basri.android.nobs_launcher.status.SystemLabelPolicy
 import dev.basri.android.nobs_launcher.status.SystemLabelReader
+import dev.basri.android.nobs_launcher.status.VpnStatusMonitor
 import dev.basri.android.nobs_launcher.time.ClockController
 
 class HomeActivity : Activity() {
@@ -180,9 +181,12 @@ class HomeActivity : Activity() {
         binding.emptyState.visibility = if (allItems.isEmpty()) View.VISIBLE else View.GONE
         binding.welcome.text = currentConfig.welcomeText
         binding.welcome.visibility = if (currentConfig.welcomeText.isBlank()) View.GONE else View.VISIBLE
-        val wifiName = systemLabelReader.wifiName()
+        val wifiName = SystemLabelPolicy.visibleWifiName(
+            showWifiName = currentConfig.showWifiName,
+            wifiName = systemLabelReader.wifiName(),
+        )
         binding.wifi.text = wifiName.orEmpty()
-        binding.wifi.visibility = if (currentConfig.showWifiName && wifiName != null) {
+        binding.wifi.visibility = if (wifiName != null) {
             View.VISIBLE
         } else {
             View.GONE

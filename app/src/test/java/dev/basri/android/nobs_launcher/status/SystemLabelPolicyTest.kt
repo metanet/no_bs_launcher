@@ -17,6 +17,25 @@ class SystemLabelPolicyTest {
     }
 
     @Test
+    fun wifiDisplayNameRequiresAnEnabledPreferenceAndUsableSsid() {
+        assertEquals(
+            "Kahveci House",
+            SystemLabelPolicy.visibleWifiName(
+                showWifiName = true,
+                wifiName = "Kahveci House",
+            ),
+        )
+        assertNull(SystemLabelPolicy.visibleWifiName(showWifiName = true, wifiName = null))
+        assertNull(SystemLabelPolicy.visibleWifiName(showWifiName = true, wifiName = ""))
+        assertNull(
+            SystemLabelPolicy.visibleWifiName(
+                showWifiName = false,
+                wifiName = "Kahveci House",
+            ),
+        )
+    }
+
+    @Test
     fun locationUsesTheMostSpecificSystemTimeZoneComponent() {
         assertEquals("London", SystemLabelPolicy.locationFromTimeZone("Europe/London"))
         assertEquals("New York", SystemLabelPolicy.locationFromTimeZone("America/New_York"))

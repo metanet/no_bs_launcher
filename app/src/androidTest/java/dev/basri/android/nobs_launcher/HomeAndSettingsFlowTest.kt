@@ -148,6 +148,16 @@ class HomeAndSettingsFlowTest {
             onView(withId(R.id.open_android_settings)).check(matches(hasFocus()))
             sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
             onView(withId(R.id.build_info)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_LEFT)
+            onView(withId(R.id.open_android_settings)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_LEFT)
+            onView(withId(R.id.web_shortcuts)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_LEFT)
+            onView(withId(R.id.save)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_DOWN)
+            onView(withId(R.id.welcome_text)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_UP)
+            onView(withId(R.id.save)).check(matches(hasFocus()))
 
             scenario.onActivity { settings ->
                 val webShortcuts = settings.findViewById<View>(R.id.web_shortcuts)
@@ -173,6 +183,9 @@ class HomeAndSettingsFlowTest {
                 assertEquals(R.id.web_shortcuts, androidSettings.nextFocusLeftId)
                 assertEquals(R.id.build_info, androidSettings.nextFocusRightId)
                 assertEquals(R.id.open_android_settings, buildInfo.nextFocusLeftId)
+                listOf(save, webShortcuts, androidSettings, buildInfo).forEach { action ->
+                    assertEquals(R.id.welcome_text, action.nextFocusDownId)
+                }
                 assertEquals(
                     R.id.save,
                     settings.findViewById<View>(R.id.welcome_text).nextFocusUpId,
