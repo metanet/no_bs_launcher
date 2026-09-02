@@ -31,12 +31,12 @@ welcome-text field focuses Save, the first action.
 
 ## Testing
 
-Connected UI tests cover both available and unavailable Wi-Fi names without
-hard-coding a particular SSID. They verify that the Wi-Fi row is visible only when
-the system reader returns a usable name. Settings UI tests verify the visual order,
-horizontal alignment, and every left/right/up/down focus link. The full debug and
-release unit suites, connected Android suite, lint checks, and release build run
-before completion.
+A deterministic unit policy test covers valid, absent, blank, and preference-disabled
+Wi-Fi names. The connected UI test adapts to the device's actual system result and
+verifies the corresponding visible or hidden state without hard-coding an SSID.
+Settings UI tests verify the visual order, horizontal alignment, and every
+left/right/up/down focus link. The full debug and release unit suites, connected
+Android suite, lint checks, and release build run before completion.
 
 ## Source control
 
