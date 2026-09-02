@@ -378,3 +378,310 @@
   after three seconds the device reported `mWakefulness=Asleep` and
   `mWakefulnessChanging=false`. No mute, unmute, volume, or other audio command
   was sent during implementation, verification, installation, or handoff.
+
+## 2026-09-02 - Website reachability and declared favicons
+
+- Root cause established from the release implementation: favicon fetching
+  rewrites every shortcut to only the origin's `/favicon.ico` and never requests
+  or parses the configured page. Sites that declare an icon at another path
+  therefore show the globe. Save also persists before any reachability result.
+- Basri approved a bounded page `GET`, accepting `2xx`, `401`, and `403`, with
+  inline failure and HTML-declared favicon discovery before origin fallback.
+  The approved design and implementation plan are written but intentionally
+  uncommitted because no new commit was authorized.
+- Execution baseline: branch `feature/web-shortcuts` at `b2143ad`; only the new
+  spec and plan are untracked. `.worktrees` is ignored and the debug unit suite
+  passes. Before device mutation, Box R `192.168.1.154:5555` reports
+  `mWakefulness=Awake`; preserve Awake and do not send power or audio commands.
+- Next: implement Task 1 with a failing `WebsiteHttpClientTest`, verify RED,
+  implement the bounded client, verify GREEN, then run independent spec and
+  quality reviews before continuing.
+- Task 1 TDD: missing client/result types produced the intended compile RED.
+  A cleanup regression then failed on disconnect and passed after connection
+  assignment was moved before request configuration. The implementer reports
+  10 focused tests, lintDebug, assembleDebug, and all 60 debug unit tests green.
+- Task 1 spec review found the twelve-second deadline is not strict: one
+  remaining-time value is assigned to both connect and response-header reads,
+  so those phases can each consume it sequentially. Add a deterministic RED
+  that advances time between connect and response-code read, then recalculate
+  the read timeout after connect before re-running review.
+- The new regression produced the intended `expected 1000, was 4000` RED; after
+  explicit connect plus a remaining-budget read timeout, all 11 focused and 60
+  debug unit tests passed and spec review approved Task 1.
+- Code-quality review still blocks Task 1 on Android semantics: connection
+  timeout can apply per resolved address and post-connect read-timeout mutation
+  may not update the active socket, so arithmetic alone cannot enforce a hard
+  deadline. It also found VM-wide CookieHandler/Authenticator state can add
+  ambient credentials and non-HTML/error/redirect streams are not explicitly
+  closed. Add watchdog-level deadline coverage, suppress ambient credentials,
+  close all obtained response streams, and correct the misleading charset test
+  before repeating both reviews.
+- The HttpURLConnection remediation exposed an architectural contradiction:
+  Android does not expose reliable per-connection suppression/restoration of
+  VM-global authentication on the minimum API, and a worker that ignores
+  disconnect/interrupt cannot simultaneously guarantee hard return and exact
+  global-state restoration. Stopped that implementation before accepting it.
+- Revised Task 1 to use OkHttp, whose per-client no-cookie/no-auth policy,
+  response `use` lifecycle, and call timeout directly satisfy the privacy,
+  cleanup, and hard-deadline requirements. Manual redirects will assign each
+  Call the remaining shared twelve-second budget. This is an implementation
+  dependency change only; approved user-visible behavior is unchanged.
+- Reconciled the written plan after the interrupted implementation. The page
+  probe and exact-candidate favicon fetcher will each use explicitly private
+  OkHttp clients; no HttpURLConnection global cookie/authentication state or
+  watchdog threads remain in the target architecture. Task 1 is being rebuilt
+  test-first against that boundary before either downstream task begins.
+- Dependency compatibility check: OkHttp 5.5.0's Android AAR requires
+  `minCompileSdk=37`, so `:app:checkDebugAarMetadata` correctly failed against
+  this project's compile SDK 36. The newest compatible stable release found,
+  OkHttp 5.4.0, passes the same AAR metadata check. Selected 5.4.0 instead of
+  broadening the task into an AGP/SDK upgrade or using the JVM-only artifact.
+- Task 1 complete. The OkHttp implementation now classifies `2xx`, `401`, and
+  `403`, enforces one shared deadline over manual redirects and body reads,
+  caps HTML at 256 KiB, closes every response, and isolates cookies/auth/cache.
+  The implementer reported 11/11 focused tests, the full debug unit suite,
+  lintDebug, and assembleDebug green; root independently reran the focused
+  class with `--rerun-tasks` successfully. Independent spec review passed and
+  code-quality review approved with no blocking findings. Next: declared icon
+  discovery, exact-candidate fetching, and first-decodable storage.
+- Task 2 boundary decision: `FaviconGateway` currently lives in the Task 3
+  service file. Task 2 will add the candidate-list repository overload while
+  retaining the legacy override so every intermediate state compiles; Task 3
+  will switch the interface and service call site together. This preserves the
+  plan's independently buildable phases without mixing file ownership.
+- Task 2 initial implementation passed focused parser/fetcher tests, all four
+  connected repository tests on Box R, the debug unit suite, lintDebug, and
+  assembleDebug. Spec review then found cross-category duplicate URLs and
+  `<link-preview>` false positives; new regressions failed first and now pass,
+  and repeat spec review is green.
+- Task 2 quality review found deeper robustness gaps: regex scanning could be
+  quadratic or accept links inside truncated comments/scripts, favicon redirect
+  calls reset the four-second budget, and repository exceptions could skip the
+  completion callback. Fix these test-first with a bounded linear scanner, one
+  shared per-fetch deadline, and exception-safe completion. Keep final-page URL
+  resolution (not HTML `<base>`) because that is the approved explicit design.
+- The first hardening pass added a linear outer scanner, truncated raw-context
+  handling, quoted-`>` support, first-wins attributes, a shared four-second
+  favicon deadline, exact max+1 overflow detection, and exception-safe callback
+  completion. It passed focused/full debug tests, lint, assemble, and 5/5
+  connected repository tests. Repeat spec review then caught non-element names
+  such as `<link_preview>`; delimiter regressions were added and the repeat spec
+  review now passes.
+- Final quality review benchmarked the remaining attribute regex and found
+  quadratic retry behavior on long malformed tags. Replace that last regex with
+  a one-pass attribute scanner and add an adversarial performance regression
+  before seeking final quality approval.
+- Task 2 complete. The attribute regex was replaced with a one-pass scanner,
+  malformed long input and raw/RCDATA contexts gained regressions, and focused
+  plus full debug tests, lintDebug, assembleDebug, diff-check, and 5/5 connected
+  repository tests pass. Final independent spec and quality reviews both
+  approve with no remaining findings. Next: make Save probe asynchronously
+  before persistence and pass the discovered candidate list into this pipeline.
+- Task 3 interface migration requires the deferred mechanical repository edit:
+  remove its temporary legacy `fetchAndStore(shortcut, callback)` override and
+  mark the already-tested candidate-list overload as the `FaviconGateway`
+  implementation. Expanded Task 3 ownership to that one compatibility edit so
+  the gateway and all implementers change atomically and the phase compiles.
+- Task 3 complete. The async service probes before any mutation, serializes
+  cancellation against persistence, preserves UUID/favorite order, deletes old
+  icons only after a successful write, reports Saved before candidate fetching,
+  and rejects stale icon attachment. The final follow-up documented callback
+  threads and isolated client callback exceptions so best-effort favicon work
+  still runs. Eighteen focused service tests, debug+release unit suites,
+  lintDebug, assembleDebug, and diff-check pass; independent spec and quality
+  reviews approve. Next: migrate the editor off the temporary synchronous
+  bridge and prove progress/error/cancellation behavior on Box R.
+- Task 4 host implementation complete: the editor displays a checking row,
+  disables fields and Save while leaving Cancel enabled, dispatches service
+  results to main, keeps inaccessible inputs open with an inline URL error,
+  cancels on dismissal/destruction, and removes the temporary sync bridge.
+  Cleartext HTTP is an explicit manifest boundary with no new permission.
+- Box R temporarily disappeared from ADB, so the first connected attempt failed
+  before test execution with `No connected devices`. A direct `adb connect`
+  restored `192.168.1.154:5555`; root then reran the focused connected class
+  with `--rerun-tasks`: all 24/24 tests passed in 2m56s. Spec review passes and
+  quality review approves with only minor accessibility/lifecycle/test-hardening
+  notes. Before closing Task 4, add live-region/focus behavior and remove the
+  two timing/port races from the connected tests, then rerun the gate.
+- Task 4 hardening follow-up: focused connected RED confirmed missing polite
+  live-region and URL-field focus; both focused cases pass after implementation.
+  Inaccessible tests now use deterministic HTTP 500 responses, and cancellation
+  queues a second probe as an executor barrier instead of observing for 500 ms.
+- The ensuing full 24-test rerun is invalid, not a test verdict: Box R's Android
+  system crashed/offlined during instrumentation (`INSTRUMENTATION_ABORTED:
+  System has crashed`, `DeadObjectException`) after only two results. Host
+  debug+release unit, lint, assemble, androidTest compilation, and diff-check
+  remain green. Wait for ADB recovery without sending power/audio commands,
+  then rerun all connected tests from a clean instrumentation start.
+- Basri physically power-cycled the unresponsive box after the Android-system
+  crash. It rejoined Wi-Fi, wireless debugging was re-enabled, `sys.boot_completed`
+  returned 1, and ADB reported Box R at `192.168.1.154:5555` Awake. A clean
+  post-reboot Task 4 connected rerun then passed all 24/24 tests with zero
+  failures in 1m28s. Task 4 spec and final quality reviews approve.
+- Task 5 pre-install evidence: release package
+  `dev.basri.android.nobs_launcher` is 0.3.0/code 4; first install remains
+  `2026-09-01 00:54:10`, last update `2026-09-02 01:18:31`; Android resolves
+  Home to `dev.basri.android.nobs_launcher/.ui.HomeActivity`; device is Awake.
+  Intended mutation sequence after a full clean gate: build/sign with
+  `scripts/build_release_apk.sh`, verify APK/certificate/permissions, guarded
+  in-place install via `scripts/install_release_apk.sh 192.168.1.154:5555`,
+  then release smoke and preservation checks. Never uninstall, power-toggle,
+  mute, unmute, or change volume.
+- Task 5 gate passed from a clean forced run: `lintDebug`, `lintRelease`, both
+  91-test unit variants, all 35 connected tests, `connectedCheck`, debug/release
+  assembly, R8, and resource shrinking completed with zero failures. The release
+  script repeated all 35 connected tests and produced a signed 464,393-byte APK
+  for 0.3.1/code 5. `apksigner` verifies certificate SHA-256
+  `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`;
+  the archive contains only ACCESS_NETWORK_STATE, INTERNET, and
+  REQUEST_DELETE_PACKAGES.
+- Guarded `adb install -r` succeeded after confirming the installed and new
+  certificate match. Post-install package evidence is 0.3.1/code 5 with the
+  original first-install timestamp `2026-09-01 00:54:10`. Cold release Home
+  retained `Welcome Basri`, `Kahveci House`, `London`, the system panels,
+  favorite order, and the existing `Osuruk tv` shortcut. Its tile displays the
+  downloaded site icon rather than the bundled globe, and activating it resumed
+  the default TCL browser with exact ACTION_VIEW data `https://tv.osur.uk`.
+  The connected release-equivalent UI suite already proved inaccessible 500
+  results show the inline error without persistence and that delayed reachable
+  saves complete. No test metadata or favorite was left behind.
+- Final state: a cold 0.3.1 Home launch completed in 887 ms, Android still
+  resolves the launcher as the default Home, its activity is top-resumed, the
+  original first-install timestamp remains intact, `git diff --check` passes,
+  and Box R is Awake. No mute, unmute, volume, or final power command was sent.
+  Changes remain uncommitted on `feature/web-shortcuts` because Basri did not
+  authorize a commit in this execution.
+- The first Task 4 worker remained in exploration and made no Task 4 file
+  changes despite two progress prompts. Interrupted it before any overlap and
+  restarted the same bounded UI task with a fresh worker instructed to move
+  directly to failing connected tests. No code was discarded and no device
+  state command was issued.
+
+## 2026-09-02 - Favicon display sizing follow-up
+
+- Reproduced and traced the tiny favicon report. Downloaded site icons commonly
+  retain 16-32px intrinsic dimensions, while both launcher favicon views use
+  Android `centerInside`, which never enlarges a drawable beyond its intrinsic
+  size. Installed app artwork begins large and is scaled down, explaining the
+  visible mismatch.
+- Decision: use aspect-preserving `fitCenter` only when a downloaded favicon is
+  bound, on both Home and Web shortcuts management. Keep normal app artwork and
+  the bundled globe on their existing `centerInside` path. This fixes existing
+  cached icons without rewriting files, cropping logos, or changing app tiles.
+- Next: add connected regressions that measure the rendered extent of a 16px
+  favicon and confirm they fail on both surfaces before changing production.
+- First RED run: management failed for the expected reason, rendering the 16px
+  test favicon at only 8x8 inside a 128x128 viewport. The Home assertion did not
+  reach the icon because its alphabetic position was below the visible grid;
+  move only the fixture label into the visible first row and repeat RED.
+- RED confirmed on both surfaces after moving the Home fixture into view: the
+  source renders at 8x8 inside Home's 231x201 artwork area and the management
+  row's 128x128 area. Production binding can now change with evidence that the
+  regressions detect the reported defect.
+- GREEN confirmed: both focused connected regressions pass after binding only
+  real downloaded favicons with `FIT_CENTER` and explicitly restoring
+  `CENTER_INSIDE` for app and fallback paths. Version is now 0.3.2/code 6.
+- Next: run the complete signed release gate before the guarded in-place update.
+- First full gate ran all 37 connected tests; 36 passed and the sole failure was
+  the manifest regression still asserting the deliberately superseded
+  0.3.1/code 5 identity. Update that version assertion to 0.3.2/code 6, run it
+  focused, then repeat the entire gate rather than treating a partial run as
+  release evidence.
+- The updated manifest regression passed focused. The complete release gate was
+  then repeated successfully: debug/release lint, both full unit variants, all
+  37/37 connected tests, connectedCheck, debug/release assembly, R8/resource
+  shrinking, and APK signature verification passed.
+- Release candidate evidence: 0.3.2/code 6, 464,484 bytes, APK SHA-256
+  `8e4f98c8f4cc140134ae2d561c0e8137c38f04085f621ef4848c350a5a76a5bc`,
+  signing certificate SHA-256
+  `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`,
+  and only ACCESS_NETWORK_STATE, INTERNET, and REQUEST_DELETE_PACKAGES.
+- Pre-install Box R evidence: installed release is still 0.3.1/code 5, first
+  install time remains `2026-09-01 00:54:10`, No bullshit launcher resolves as
+  Home, and the device is Awake. Next: guarded in-place update and release UI
+  smoke; do not send power or audio commands.
+- Guarded signature comparison and `adb install -r` succeeded. Release 0.3.2 is
+  installed in place, and a cold Home screenshot proves the existing cached
+  `Osuruk tv` favicon now fills its artwork region while labels, app artwork,
+  and the dashboard remain intact.
+- The strict report scan exposed five lint warnings that Gradle permits: two
+  deliberate whole-dataset RecyclerView refreshes, one ASCII ellipsis, and two
+  intentionally custom-styled TV buttons. Scope the refresh suppressions to
+  those methods, use the typographic ellipsis, and annotate the two intentional
+  TV style exceptions; rebuild before final evidence.
+- Final rebuild passed with zero lint errors or warnings, 91/91 debug unit
+  tests, 91/91 release unit tests, 37/37 connected tests, connectedCheck,
+  debug/release assembly, R8/resource shrinking, and signing. The final APK is
+  464,481 bytes with SHA-256
+  `53faa3fa263ada8de58ea2e0f7380164697f20042484e9ab8618734866d0d91d`.
+- Next: guarded-update the installed 0.3.2 once more so it exactly matches this
+  final verified APK, then repeat the Home screenshot and state checks.
+- Final guarded update installed the exact verified APK. Pulling the installed
+  archive back from Box R produced the identical SHA-256. Package evidence is
+  0.3.2/code 6 and the original first-install timestamp remains
+  `2026-09-01 00:54:10`.
+- Final cold launch completed in 899 ms. The screenshot shows the existing
+  cached `Osuruk tv` favicon enlarged in its tile, alongside unchanged app
+  artwork and preserved `Welcome Basri`, `Kahveci House`, and `London` values.
+  No new download or private-file migration was required.
+- One read-only final-evidence command was rejected before execution because
+  its temporary-directory cleanup trap matched the tool's destructive-command
+  guard. It made no changes; the checks were rerun with an explicit temporary
+  file and all completed.
+- Final device state: No bullshit launcher is the resolved and top-resumed
+  Home; Box R is Awake. No mute, unmute, volume, Home, or power key was sent.
+  The Android audio dump reports the box's music stream itself as unmuted; the
+  external TV mute state cannot be observed through this ADB endpoint and was
+  not changed.
+- Final source state passes `git diff --check` and remains intentionally
+  uncommitted on `feature/web-shortcuts`; Basri did not authorize a commit for
+  this follow-up.
+- The first plan-completeness search also matched the header's example checkbox;
+  anchoring it to actual list items confirmed every implementation step is
+  checked. This was a read-only query mistake, not a product/test failure.
+
+## 2026-09-02 - Favicon vertical-alignment follow-up
+
+- Basri reported that the enlarged square favicon is now taller than regular
+  app artwork. Root cause: `FIT_CENTER` fills the Home artwork view's roughly
+  100dp height for a square icon, while normal 16:9 TV banners are constrained
+  by the roughly 115dp width and render only about 65dp high.
+- Decision: keep aspect-preserving scaling and establish one centered 65dp
+  content band for all Home artwork using 18dp top/bottom padding. This leaves
+  tile/label geometry unchanged, aligns square and landscape artwork, and
+  remains vendor-neutral. Shortcut management retains its square icon area.
+- Next: replace the stale full-height regression with a real favicon-versus-app
+  rendered-height comparison, prove RED, then change the shared layout.
+- RED confirmed on Box R: the small favicon renders at 201px high beside
+  `000Player` artwork at 129.9375px. This directly reproduces Basri's visual
+  report and validates using the measured 18dp top/bottom artwork inset.
+- GREEN confirmed: after adding the shared inset, both the real app-versus-web
+  alignment regression and the unchanged management-icon sizing regression
+  pass on Box R. Release identity is bumped to 0.3.3/code 7 for deployment.
+- Next: run the complete signed gate, then guarded-install and visually inspect
+  the exact final artifact.
+- The complete 0.3.3 gate passed: zero-warning debug/release lint, 91/91 debug
+  unit tests, 91/91 release unit tests, 37/37 connected tests, connectedCheck,
+  both assemblies, R8/resource shrinking, and signature verification. The
+  464,601-byte APK has SHA-256
+  `8ada6710295ede46006728c0f211c902772a27aee708c4853ab665236885f26a`
+  and the established release certificate.
+- Pre-install state remains 0.3.2/code 6 with original first-install time,
+  release Home ownership, and Awake device state. Next: guarded in-place
+  install and final screenshot; no power or audio commands.
+- Guarded certificate comparison and `adb install -r` installed 0.3.3 without
+  uninstalling or clearing data. A 729ms cold release launch shows the cached
+  `Osuruk tv` favicon centered in the same vertical artwork band as YouTube,
+  000Player, and Jellyfin; tile and label baselines remain aligned.
+- Next: pull back the installed APK to prove byte identity, confirm version,
+  original install time, Home ownership, and device state, then run the final
+  diff/plan checks. No power or audio command has been sent.
+- Final evidence complete: the pulled installed APK exactly matches the signed
+  release SHA-256, package identity is 0.3.3/code 7, and first install remains
+  `2026-09-01 00:54:10`. No bullshit launcher is resolved and top-resumed Home;
+  preserved `Welcome Basri`, `Kahveci House`, `London`, and `Osuruk tv` are
+  present in the final UI hierarchy; Box R remains Awake.
+- `git diff --check`, the zero-warning lint reports, both 91-test unit variants,
+  the 37-test connected report, and the completed alignment plan all pass.
+  Changes remain intentionally uncommitted on `feature/web-shortcuts`. No Home,
+  power, mute, unmute, or volume command was sent.
