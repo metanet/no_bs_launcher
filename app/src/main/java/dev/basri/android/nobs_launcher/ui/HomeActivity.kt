@@ -1,5 +1,6 @@
 package dev.basri.android.nobs_launcher.ui
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
@@ -25,6 +26,7 @@ import dev.basri.android.nobs_launcher.model.WebShortcut
 import dev.basri.android.nobs_launcher.stats.SystemStatsDisplay
 import dev.basri.android.nobs_launcher.stats.SystemStatsMonitor
 import dev.basri.android.nobs_launcher.status.VpnStatusMonitor
+import dev.basri.android.nobs_launcher.status.SystemLabelReader
 import dev.basri.android.nobs_launcher.time.ClockController
 
 class HomeActivity : Activity() {
@@ -36,6 +38,7 @@ class HomeActivity : Activity() {
     private lateinit var clockController: ClockController
     private lateinit var vpnStatusMonitor: VpnStatusMonitor
     private lateinit var systemStatsMonitor: SystemStatsMonitor
+    private lateinit var systemLabelReader: SystemLabelReader
     private var favoriteItems = listOf<HomeItem>()
     private var remainingItems = listOf<HomeItem>()
     private var moveSnapshot: List<String>? = null
@@ -52,6 +55,7 @@ class HomeActivity : Activity() {
         setContentView(binding.root)
 
         store = LayoutStore(this)
+        systemLabelReader = SystemLabelReader(this)
         catalog = AppCatalog(this)
         val favicons = FaviconRepository(this)
         shortcutService = WebShortcutService(store, favicons)
@@ -170,16 +174,12 @@ class HomeActivity : Activity() {
         binding.emptyState.visibility = if (allItems.isEmpty()) View.VISIBLE else View.GONE
         binding.welcome.text = currentConfig.welcomeText
         binding.welcome.visibility = if (currentConfig.welcomeText.isBlank()) View.GONE else View.VISIBLE
-        binding.wifi.text = currentConfig.wifiLabel
-        binding.wifi.visibility = if (currentConfig.wifiLabel.isBlank()) View.GONE else View.VISIBLE
-        binding.location.text = currentConfig.locationLabel
-        binding.location.visibility = if (
-            currentConfig.showLocation && currentConfig.locationLabel.isNotBlank()
-        ) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        binding.wifi.text = systemLabelReader.wifiName() ?: getString(R.string.wifi_unavailable)
+        binding.wifi.visibility = if (currentConfig.showWifiName) View.VISIBLE else View.GONE
+        binding.location.text = systemLabelReader.locationName()
+            ?: getString(R.string.location_unavailable)
+        binding.location.visibility = if (currentConfig.showLocation) View.VISIBLE else View.GONE
+        requestWifiPermissionOnce(currentConfig)
         showVpnStatus = currentConfig.showVpnStatus
         if (currentConfig.showVpnStatus) {
             vpnStatusMonitor.start()
@@ -214,7 +214,44 @@ class HomeActivity : Activity() {
         binding.memoryStats.text = getString(R.string.memory_stats, stats.memory)
         binding.cpuStats.text = getString(R.string.cpu_stats, stats.cpu)
         binding.storageStats.text = getString(R.string.storage_stats, stats.storage)
-        binding.networkStats.text = getString(R.string.network_stats, stats.network)
+        binding.networkIngressStats.text = getString(
+            R.string.network_ingress_stats,
+            stats.networkIngress,
+        )
+        binding.networkEgressStats.text = getString(
+            R.string.network_egress_stats,
+            stats.networkEgress,
+        )
+    }
+
+    private fun requestWifiPermissionOnce(config: LauncherConfig) {
+        if (
+            !config.showWifiName ||
+            SystemLabelReader.hasWifiNamePermission(this) ||
+            store.hasRequestedWifiPermission()
+        ) {
+            return
+        }
+        if (store.markWifiPermissionRequested()) {
+            requestPermissions(
+                WIFI_NAME_PERMISSIONS,
+                REQUEST_WIFI_NAME_PERMISSION,
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (
+            requestCode == REQUEST_WIFI_NAME_PERMISSION &&
+            SystemLabelReader.hasWifiNamePermission(this)
+        ) {
+            bindHome()
+        }
     }
 
     private fun openItem(item: HomeItem) {
@@ -414,6 +451,11 @@ class HomeActivity : Activity() {
     private companion object {
         const val GRID_COLUMNS = 4
         const val LAUNCH_ERROR_DURATION_MS = 4_000L
+        const val REQUEST_WIFI_NAME_PERMISSION = 1001
+        val WIFI_NAME_PERMISSIONS = arrayOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
     }
 
     private enum class HomeAction(val labelResource: Int) {

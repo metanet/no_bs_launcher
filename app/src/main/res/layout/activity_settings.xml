@@ -7,13 +7,76 @@
     android:orientation="vertical"
     android:padding="@dimen/screen_padding">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/settings"
-        android:textColor="@color/text_primary"
-        android:textSize="30sp"
-        android:textStyle="bold" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        tools:ignore="ButtonStyle">
+
+        <TextView
+            android:id="@+id/settings_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings"
+            android:textColor="@color/text_primary"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/web_shortcuts"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:background="@drawable/tile_selector"
+            android:nextFocusDown="@+id/welcome_text"
+            android:nextFocusRight="@id/open_android_settings"
+            android:paddingHorizontal="20dp"
+            android:text="@string/web_shortcuts"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
+
+        <Button
+            android:id="@+id/open_android_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginStart="18dp"
+            android:background="@drawable/tile_selector"
+            android:nextFocusDown="@id/welcome_text"
+            android:nextFocusLeft="@id/web_shortcuts"
+            android:nextFocusRight="@+id/build_info"
+            android:paddingHorizontal="20dp"
+            android:text="@string/open_android_settings"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
+
+        <Button
+            android:id="@+id/build_info"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginStart="18dp"
+            android:background="@drawable/tile_selector"
+            android:nextFocusDown="@id/welcome_text"
+            android:nextFocusLeft="@id/open_android_settings"
+            android:nextFocusRight="@+id/save"
+            android:paddingHorizontal="20dp"
+            android:text="@string/build_info"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
+
+        <Button
+            android:id="@+id/save"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_marginStart="18dp"
+            android:background="@drawable/tile_selector"
+            android:nextFocusDown="@id/welcome_text"
+            android:nextFocusLeft="@id/build_info"
+            android:paddingHorizontal="28dp"
+            android:text="@string/save"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary" />
+    </LinearLayout>
 
     <EditText
         android:id="@+id/welcome_text"
@@ -28,52 +91,25 @@
         android:paddingHorizontal="16dp"
         android:singleLine="true"
         android:textColor="@color/text_primary"
-        android:textColorHint="@color/text_secondary" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:orientation="horizontal">
-
-        <EditText
-            android:id="@+id/wifi_label"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginEnd="12dp"
-            android:layout_weight="1"
-            android:background="@drawable/tile_selector"
-            android:hint="@string/wifi_label"
-            android:importantForAutofill="no"
-            android:inputType="textCapWords"
-            android:maxLength="50"
-            android:paddingHorizontal="16dp"
-            android:singleLine="true"
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary" />
-
-        <EditText
-            android:id="@+id/location_label"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="12dp"
-            android:layout_weight="1"
-            android:background="@drawable/tile_selector"
-            android:hint="@string/location_label"
-            android:importantForAutofill="no"
-            android:inputType="textCapWords"
-            android:maxLength="50"
-            android:paddingHorizontal="16dp"
-            android:singleLine="true"
-            android:textColor="@color/text_primary"
-            android:textColorHint="@color/text_secondary" />
-    </LinearLayout>
+        android:textColorHint="@color/text_secondary"
+        android:nextFocusUp="@id/web_shortcuts" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
+
+        <CheckBox
+            android:id="@+id/show_wifi_name"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:buttonTint="@color/focus_blue"
+            android:focusable="true"
+            android:text="@string/show_wifi_name"
+            android:textColor="@color/text_primary"
+            android:textSize="17sp" />
 
         <CheckBox
             android:id="@+id/show_location"
@@ -124,45 +160,4 @@
         android:layout_height="0dp"
         android:layout_marginTop="4dp"
         android:layout_weight="1" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:gravity="end"
-        android:orientation="horizontal"
-        tools:ignore="ButtonStyle">
-
-        <Button
-            android:id="@+id/web_shortcuts"
-            android:layout_width="wrap_content"
-            android:layout_height="56dp"
-            android:background="@drawable/tile_selector"
-            android:paddingHorizontal="20dp"
-            android:text="@string/web_shortcuts"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
-
-        <Button
-            android:id="@+id/open_android_settings"
-            android:layout_width="wrap_content"
-            android:layout_height="56dp"
-            android:layout_marginStart="18dp"
-            android:background="@drawable/tile_selector"
-            android:paddingHorizontal="20dp"
-            android:text="@string/open_android_settings"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
-
-        <Button
-            android:id="@+id/save"
-            android:layout_width="wrap_content"
-            android:layout_height="56dp"
-            android:layout_marginStart="18dp"
-            android:background="@drawable/tile_selector"
-            android:paddingHorizontal="28dp"
-            android:text="@string/save"
-            android:textAllCaps="false"
-            android:textColor="@color/text_primary" />
-    </LinearLayout>
 </LinearLayout>

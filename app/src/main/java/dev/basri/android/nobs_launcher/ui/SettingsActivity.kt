@@ -1,12 +1,17 @@
 package dev.basri.android.nobs_launcher.ui
 
+import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Gravity
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
+import dev.basri.android.nobs_launcher.BuildConfig
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.AppCatalog
 import dev.basri.android.nobs_launcher.data.LayoutStore
@@ -14,6 +19,7 @@ import dev.basri.android.nobs_launcher.databinding.ActivitySettingsBinding
 import dev.basri.android.nobs_launcher.model.HomeItemId
 import dev.basri.android.nobs_launcher.model.LauncherConfig
 import dev.basri.android.nobs_launcher.model.LauncherConfigPolicy
+import dev.basri.android.nobs_launcher.status.SystemLabelReader
 
 class SettingsActivity : Activity() {
     private lateinit var binding: ActivitySettingsBinding
@@ -33,11 +39,19 @@ class SettingsActivity : Activity() {
         isFirstRun = intent.getBooleanExtra(EXTRA_FIRST_RUN, !workingConfig.firstRunComplete)
 
         binding.welcomeText.setText(workingConfig.welcomeText)
-        binding.wifiLabel.setText(workingConfig.wifiLabel)
-        binding.locationLabel.setText(workingConfig.locationLabel)
+        binding.showWifiName.isChecked = workingConfig.showWifiName
         binding.showLocation.isChecked = workingConfig.showLocation
         binding.showVpnStatus.isChecked = workingConfig.showVpnStatus
         binding.showSystemStats.isChecked = workingConfig.showSystemStats
+        binding.showWifiName.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked && !SystemLabelReader.hasWifiNamePermission(this)) {
+                store.markWifiPermissionRequested()
+                requestPermissions(
+                    WIFI_NAME_PERMISSIONS,
+                    REQUEST_WIFI_NAME_PERMISSION,
+                )
+            }
+        }
 
         adapter = ManageAppsAdapter { app, visible ->
             workingConfig = LauncherConfigPolicy.setVisible(
@@ -60,6 +74,7 @@ class SettingsActivity : Activity() {
         binding.webShortcuts.setOnClickListener {
             startActivity(Intent(this, WebShortcutsActivity::class.java))
         }
+        binding.buildInfo.setOnClickListener { showBuildInformation() }
         binding.save.setOnClickListener { saveAndFinish() }
     }
 
@@ -88,13 +103,12 @@ class SettingsActivity : Activity() {
                     selectedAppIds.forEach { itemId ->
                         if (itemId !in this) add(itemId)
                     }
-                }
+            }
             current.copy(
                 firstRunComplete = true,
-                wifiLabel = binding.wifiLabel.text.toString(),
-                locationLabel = binding.locationLabel.text.toString(),
                 favoriteItemIds = mergedFavoriteIds,
                 welcomeText = binding.welcomeText.text.toString(),
+                showWifiName = binding.showWifiName.isChecked,
                 showLocation = binding.showLocation.isChecked,
                 showVpnStatus = binding.showVpnStatus.isChecked,
                 showSystemStats = binding.showSystemStats.isChecked,
@@ -105,6 +119,26 @@ class SettingsActivity : Activity() {
         } else {
             Toast.makeText(this, R.string.shortcut_save_failed, Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun showBuildInformation() {
+        val message = buildString {
+            append(getString(R.string.build_hash, BuildConfig.BUILD_GIT_HASH))
+            append('\n')
+            append(getString(R.string.build_date, BuildConfig.BUILD_DATE_UTC))
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.build_information)
+            .setMessage(message)
+            .setPositiveButton(android.R.string.ok, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.findViewById<TextView>(android.R.id.message)?.apply {
+                gravity = Gravity.START
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            }
+        }
+        dialog.show()
     }
 
     @Suppress("DEPRECATION")
@@ -120,5 +154,10 @@ class SettingsActivity : Activity() {
 
     companion object {
         const val EXTRA_FIRST_RUN = "first_run"
+        private const val REQUEST_WIFI_NAME_PERMISSION = 1001
+        private val WIFI_NAME_PERMISSIONS = arrayOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
     }
 }

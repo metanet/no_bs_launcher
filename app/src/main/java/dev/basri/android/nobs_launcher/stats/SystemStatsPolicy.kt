@@ -55,6 +55,11 @@ object SystemStatsPolicy {
                 current.cpuCount,
             )
         val rates = networkRates(previous?.networkCounters, current.networkCounters)
+        val networkState = when {
+            current.networkCounters == null -> UNAVAILABLE
+            rates == null -> MEASURING
+            else -> null
+        }
         return SystemStatsDisplay(
             memory = formatCapacityUse(current.totalMemoryBytes, current.availableMemoryBytes),
             cpu = formatCpu(
@@ -64,12 +69,10 @@ object SystemStatsPolicy {
                 maxFrequencyHz = current.cpuMaxFrequencyHz,
             ),
             storage = formatCapacityUse(current.totalStorageBytes, current.availableStorageBytes),
-            network = when {
-                current.networkCounters == null -> UNAVAILABLE
-                rates == null -> MEASURING
-                else -> "↓ ${formatBytes(rates.receivedBytesPerSecond)}/s · " +
-                    "↑ ${formatBytes(rates.transmittedBytesPerSecond)}/s"
-            },
+            networkIngress = networkState
+                ?: "${formatBytes(checkNotNull(rates).receivedBytesPerSecond)}/s",
+            networkEgress = networkState
+                ?: "${formatBytes(checkNotNull(rates).transmittedBytesPerSecond)}/s",
         )
     }
 
@@ -119,7 +122,7 @@ object SystemStatsPolicy {
             if (cpuCount > 0) add("$cpuCount ${if (cpuCount == 1) "core" else "cores"}")
             maxFrequencyHz?.takeIf { it > 0 }?.let { add(formatFrequency(it)) }
         }.ifEmpty { listOf("capacity unavailable") }
-        return (listOf(usage) + capacity).joinToString(" · ")
+        return (capacity + usage).joinToString(" · ")
     }
 
     private fun formatFrequency(hertz: Long): String {

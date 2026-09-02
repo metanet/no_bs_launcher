@@ -108,11 +108,24 @@
                 android:textSize="13sp" />
 
             <TextView
-                android:id="@+id/network_stats"
+                android:id="@+id/network_ingress_stats"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="3dp"
-                android:text="@string/network_unavailable"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="@string/network_ingress_unavailable"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/network_egress_stats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:text="@string/network_egress_unavailable"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>

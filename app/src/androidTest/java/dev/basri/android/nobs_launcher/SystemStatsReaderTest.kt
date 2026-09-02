@@ -42,7 +42,7 @@ class SystemStatsReaderTest {
                 current > first.cpuIdleCounters!!.idleMicros
             } == true,
         )
-        assertTrue(display.cpu.substringBefore('%').toInt() in 0..100)
+        assertTrue(display.cpu.substringAfterLast(" · ").removeSuffix("%").toInt() in 0..100)
         first.networkCounters?.let {
             assertTrue(it.receivedBytes >= 0)
             assertTrue(it.transmittedBytes >= 0)

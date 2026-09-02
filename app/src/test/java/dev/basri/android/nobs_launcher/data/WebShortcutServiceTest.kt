@@ -517,8 +517,6 @@ class WebShortcutServiceTest {
         shortcuts: List<WebShortcut> = emptyList(),
     ) = LauncherConfig(
         firstRunComplete = true,
-        wifiLabel = "",
-        locationLabel = "",
         favoriteItemIds = favorites,
         shortcuts = shortcuts,
     )

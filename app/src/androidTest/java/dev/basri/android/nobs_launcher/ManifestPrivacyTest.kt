@@ -19,7 +19,7 @@ class ManifestPrivacyTest {
     private val packageManager = context.packageManager
 
     @Test
-    fun productionPackageHasOnlyApprovedNormalPermissions() {
+    fun productionPackageHasOnlyApprovedPermissions() {
         val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             packageManager.getPackageInfo(
                 context.packageName,
@@ -32,7 +32,10 @@ class ManifestPrivacyTest {
 
         assertEquals(
             setOf(
+                Manifest.permission.ACCESS_COARSE_LOCATION,
                 Manifest.permission.ACCESS_NETWORK_STATE,
+                Manifest.permission.ACCESS_WIFI_STATE,
+                Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.INTERNET,
                 Manifest.permission.REQUEST_DELETE_PACKAGES,
             ),
@@ -41,11 +44,11 @@ class ManifestPrivacyTest {
     }
 
     @Test
-    fun packageVersionIsZeroPointThreeThreeCodeSeven() {
+    fun packageVersionIsZeroPointFourOneCodeNine() {
         val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
 
-        assertEquals("0.3.3-debug", packageInfo.versionName)
-        assertEquals(7L, packageInfo.longVersionCode)
+        assertEquals("0.4.1-debug", packageInfo.versionName)
+        assertEquals(9L, packageInfo.longVersionCode)
     }
 
     @Test

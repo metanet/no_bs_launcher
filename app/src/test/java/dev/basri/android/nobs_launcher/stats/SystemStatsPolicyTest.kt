@@ -133,9 +133,10 @@ class SystemStatsPolicyTest {
         assertEquals(
             SystemStatsDisplay(
                 memory = "1.5 / 2.0 GB · 75%",
-                cpu = "50% · 4 cores · 1.8 GHz",
+                cpu = "4 cores · 1.8 GHz · 50%",
                 storage = "6.0 / 8.0 GB · 75%",
-                network = "↓ 2.0 KB/s · ↑ 1.0 KB/s",
+                networkIngress = "2.0 KB/s",
+                networkEgress = "1.0 KB/s",
             ),
             SystemStatsPolicy.display(previous, current),
         )
@@ -159,9 +160,9 @@ class SystemStatsPolicyTest {
             cpuIdleCounters = CpuIdleCounters(idleMicros = 3_000_000, capturedAtMillis = 2_000),
         )
 
-        assertEquals("25% · 4 cores", SystemStatsPolicy.display(previous, current).cpu)
+        assertEquals("4 cores · 25%", SystemStatsPolicy.display(previous, current).cpu)
         assertEquals(
-            "50% · 4 cores",
+            "4 cores · 50%",
             SystemStatsPolicy.display(
                 previous.copy(cpuCounters = null),
                 current.copy(cpuCounters = null),
@@ -187,12 +188,23 @@ class SystemStatsPolicyTest {
         )
 
         assertEquals(
-            "measuring… · 4 cores · 2.0 GHz",
+            "4 cores · 2.0 GHz · measuring…",
             SystemStatsPolicy.display(previous = null, current = measuring).cpu,
         )
         assertEquals(
-            "utilization unavailable · 4 cores · 2.0 GHz",
+            "4 cores · 2.0 GHz · utilization unavailable",
             SystemStatsPolicy.display(previous = null, current = capacityOnly).cpu,
+        )
+        val measuringNetwork = capacityOnly.copy(
+            networkCounters = NetworkCounters(1_000, 2_000, 1_000),
+        )
+        assertEquals(
+            "measuring…",
+            SystemStatsPolicy.display(previous = null, current = measuringNetwork).networkIngress,
+        )
+        assertEquals(
+            "measuring…",
+            SystemStatsPolicy.display(previous = null, current = measuringNetwork).networkEgress,
         )
     }
 
@@ -214,8 +226,9 @@ class SystemStatsPolicyTest {
         )
 
         assertEquals("unavailable", display.memory)
-        assertEquals("utilization unavailable · capacity unavailable", display.cpu)
+        assertEquals("capacity unavailable · utilization unavailable", display.cpu)
         assertEquals("unavailable", display.storage)
-        assertEquals("unavailable", display.network)
+        assertEquals("unavailable", display.networkIngress)
+        assertEquals("unavailable", display.networkEgress)
     }
 }

@@ -1,6 +1,7 @@
 package dev.basri.android.nobs_launcher
 
 import android.Manifest
+import android.location.LocationManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -24,11 +25,14 @@ import androidx.test.espresso.matcher.ViewMatchers.Visibility.GONE
 import androidx.test.espresso.matcher.ViewMatchers.isEnabled
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
+import androidx.test.espresso.matcher.ViewMatchers.withHint
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.rule.GrantPermissionRule
 import android.view.KeyEvent
 import android.view.InputDevice
 import android.view.KeyCharacterMap
+import android.view.Gravity
 import android.view.View
 import android.app.Activity
 import android.app.Instrumentation
@@ -61,6 +65,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.ByteArrayOutputStream
@@ -74,6 +79,13 @@ import android.os.SystemClock
 
 @RunWith(AndroidJUnit4::class)
 class HomeAndSettingsFlowTest {
+    @get:Rule
+    val wifiPermission: GrantPermissionRule =
+        GrantPermissionRule.grant(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
+
     private val context = ApplicationProvider.getApplicationContext<android.content.Context>()
 
     @After
@@ -85,8 +97,9 @@ class HomeAndSettingsFlowTest {
     fun incompleteFirstRunRoutesHomeToSettingsAndBlocksBack() {
         ActivityScenario.launch(HomeActivity::class.java).use {
             onView(withId(R.id.welcome_text)).check(matches(isDisplayed()))
-            onView(withId(R.id.wifi_label)).check(matches(isDisplayed()))
-            onView(withId(R.id.location_label)).check(matches(isDisplayed()))
+            onView(withHint("Wi-Fi name")).check(doesNotExist())
+            onView(withHint("Location")).check(doesNotExist())
+            onView(withId(R.id.show_wifi_name)).check(matches(isChecked()))
             onView(withId(R.id.show_location)).check(matches(isChecked()))
             onView(withId(R.id.show_vpn_status)).check(matches(isChecked()))
             onView(withId(R.id.show_system_stats)).check(matches(isChecked()))
@@ -100,12 +113,72 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun settingsKeepsQuickActionsInOneTopRowAndOpensBuildInformation() {
+        LayoutStore(context).save(completedConfig())
+
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            onView(withId(R.id.web_shortcuts)).check(matches(isDisplayed()))
+            onView(withId(R.id.open_android_settings)).check(matches(isDisplayed()))
+            onView(withId(R.id.build_info)).check(matches(isDisplayed()))
+            onView(withId(R.id.save)).check(matches(isDisplayed()))
+            val buildHash = context.getString(R.string.build_hash, BuildConfig.BUILD_GIT_HASH)
+            val buildDate = context.getString(R.string.build_date, BuildConfig.BUILD_DATE_UTC)
+            val buildMessage = "$buildHash\n$buildDate"
+            onView(withText(buildHash)).check(doesNotExist())
+            onView(withId(R.id.build_info)).perform(click())
+            onView(withId(android.R.id.message)).inRoot(isDialog())
+                .check(matches(withText(buildMessage)))
+                .check { view, noViewException ->
+                    noViewException?.let { throw it }
+                    val message = view as TextView
+                    val absoluteGravity = Gravity.getAbsoluteGravity(
+                        message.gravity,
+                        message.layoutDirection,
+                    ) and Gravity.HORIZONTAL_GRAVITY_MASK
+                    assertEquals(Gravity.LEFT, absoluteGravity)
+                }
+            onView(withId(android.R.id.button1)).inRoot(isDialog()).perform(click())
+            scenario.onActivity { settings ->
+                assertTrue(settings.findViewById<View>(R.id.web_shortcuts).requestFocusFromTouch())
+            }
+            onView(withId(R.id.web_shortcuts)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+            onView(withId(R.id.open_android_settings)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+            onView(withId(R.id.build_info)).check(matches(hasFocus()))
+            sendDpadKey(KeyEvent.KEYCODE_DPAD_RIGHT)
+            onView(withId(R.id.save)).check(matches(hasFocus()))
+
+            scenario.onActivity { settings ->
+                val webShortcuts = settings.findViewById<View>(R.id.web_shortcuts)
+                val androidSettings = settings.findViewById<View>(R.id.open_android_settings)
+                val buildInfo = settings.findViewById<View>(R.id.build_info)
+                val save = settings.findViewById<View>(R.id.save)
+                val appList = settings.findViewById<View>(R.id.available_apps)
+                val topPositions = listOf(
+                    webShortcuts.screenBounds().top,
+                    androidSettings.screenBounds().top,
+                    buildInfo.screenBounds().top,
+                    save.screenBounds().top,
+                )
+
+                assertEquals(1, topPositions.distinct().size)
+                assertTrue(topPositions.first() < appList.screenBounds().top)
+                assertEquals(R.id.open_android_settings, webShortcuts.nextFocusRightId)
+                assertEquals(R.id.web_shortcuts, androidSettings.nextFocusLeftId)
+                assertEquals(R.id.build_info, androidSettings.nextFocusRightId)
+                assertEquals(R.id.open_android_settings, buildInfo.nextFocusLeftId)
+                assertEquals(R.id.save, buildInfo.nextFocusRightId)
+                assertEquals(R.id.build_info, save.nextFocusLeftId)
+            }
+        }
+    }
+
+    @Test
     fun completedSetupShowsStableHomeControls() {
         LayoutStore(context).save(
             LauncherConfig(
                 firstRunComplete = true,
-                wifiLabel = "Kahveci House",
-                locationLabel = "London",
                 favoriteItemIds = emptyList(),
                 welcomeText = "Welcome, Basri",
             ),
@@ -115,14 +188,23 @@ class HomeAndSettingsFlowTest {
             onView(withId(R.id.clock)).check(matches(isDisplayed()))
             onView(withId(R.id.date)).check(matches(isDisplayed()))
             onView(withId(R.id.welcome)).check(matches(withText("Welcome, Basri")))
-            onView(withId(R.id.wifi)).check(matches(withText("Kahveci House")))
-            onView(withId(R.id.location)).check(matches(isDisplayed()))
+            val locationEnabled = context.getSystemService(LocationManager::class.java).isLocationEnabled
+            val expectedWifiLabel = if (locationEnabled) {
+                "Kahveci House"
+            } else {
+                context.getString(R.string.wifi_unavailable)
+            }
+            onView(withId(R.id.wifi)).check(matches(withText(expectedWifiLabel)))
+            onView(withId(R.id.location)).check(matches(withText("London")))
             onView(withId(R.id.vpn_status)).check(matches(isAssignableFrom(TextView::class.java)))
             onView(withId(R.id.system_stats_panel)).check(matches(isDisplayed()))
             onView(withId(R.id.memory_stats)).check(matches(isDisplayed()))
             onView(withId(R.id.cpu_stats)).check(matches(isDisplayed()))
             onView(withId(R.id.storage_stats)).check(matches(isDisplayed()))
-            onView(withId(R.id.network_stats)).check(matches(isDisplayed()))
+            onView(withId(R.id.network_ingress_stats)).check(matches(isDisplayed()))
+                .check { view, _ -> assertEquals(1, (view as TextView).lineCount) }
+            onView(withId(R.id.network_egress_stats)).check(matches(isDisplayed()))
+                .check { view, _ -> assertEquals(1, (view as TextView).lineCount) }
             onView(withId(R.id.settings)).check(matches(isDisplayed()))
             onView(withId(R.id.app_grid)).check(matches(isDisplayed()))
             onView(withId(R.id.empty_state)).check(matches(withEffectiveVisibility(GONE)))
@@ -130,7 +212,7 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
-    fun settingsStartsNewAppsHiddenAndPersistsAllFieldsAndSelection() {
+    fun settingsStartsNewAppsHiddenAndPersistsDisplayOptionsAndSelection() {
         val app = uniqueCatalogApps(1).single()
         LayoutStore(context).save(completedConfig())
 
@@ -148,8 +230,7 @@ class HomeAndSettingsFlowTest {
             ).check(matches(not(isChecked())))
 
             onView(withId(R.id.welcome_text)).perform(replaceText("Welcome, Basri"))
-            onView(withId(R.id.wifi_label)).perform(replaceText("Kahveci House"))
-            onView(withId(R.id.location_label)).perform(replaceText("London"))
+            onView(withId(R.id.show_wifi_name)).perform(click())
             onView(withId(R.id.show_vpn_status)).perform(click())
             onView(withId(R.id.show_system_stats)).perform(click())
             scenario.onActivity { settings ->
@@ -165,10 +246,9 @@ class HomeAndSettingsFlowTest {
         assertEquals(
             LauncherConfig(
                 firstRunComplete = true,
-                wifiLabel = "Kahveci House",
-                locationLabel = "London",
                 favoriteItemIds = listOf(HomeItemId.app(app.packageName)),
                 welcomeText = "Welcome, Basri",
+                showWifiName = false,
                 showLocation = true,
                 showVpnStatus = false,
                 showSystemStats = false,
@@ -453,8 +533,7 @@ class HomeAndSettingsFlowTest {
     fun laterSettingsBackDiscardsTheWorkingCopy() {
         val original = completedConfig().copy(
             welcomeText = "Original",
-            wifiLabel = "Kahveci House",
-            locationLabel = "London",
+            showWifiName = true,
             showLocation = true,
             showVpnStatus = false,
             showSystemStats = true,
@@ -463,6 +542,7 @@ class HomeAndSettingsFlowTest {
 
         ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
             onView(withId(R.id.welcome_text)).perform(replaceText("Unsaved"))
+            onView(withId(R.id.show_wifi_name)).perform(click())
             onView(withId(R.id.show_location)).perform(click())
             onView(withId(R.id.show_vpn_status)).perform(click())
             onView(withId(R.id.show_system_stats)).perform(click())
@@ -494,12 +574,30 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun savingConfigurationRemovesObsoleteEditableSystemLabels() {
+        val preferences = context.getSharedPreferences(
+            LayoutStore.PREFERENCES_NAME,
+            android.content.Context.MODE_PRIVATE,
+        )
+        assertTrue(
+            preferences.edit()
+                .putString("wifi_label", "Manual Wi-Fi")
+                .putString("location_label", "Manual location")
+                .commit(),
+        )
+
+        assertTrue(LayoutStore(context).save(completedConfig()))
+
+        assertFalse(preferences.contains("wifi_label"))
+        assertFalse(preferences.contains("location_label"))
+    }
+
+    @Test
     fun homeHonorsWelcomeAndPanelVisibilitySettings() {
         LayoutStore(context).save(
             completedConfig().copy(
                 welcomeText = "Box R",
-                wifiLabel = "Kahveci House",
-                locationLabel = "London",
+                showWifiName = false,
                 showLocation = false,
                 showVpnStatus = false,
                 showSystemStats = false,
@@ -508,7 +606,7 @@ class HomeAndSettingsFlowTest {
 
         ActivityScenario.launch(HomeActivity::class.java).use {
             onView(withId(R.id.welcome)).check(matches(withText("Box R")))
-            onView(withId(R.id.wifi)).check(matches(withText("Kahveci House")))
+            onView(withId(R.id.wifi)).check(matches(withEffectiveVisibility(GONE)))
             onView(withId(R.id.location)).check(matches(withEffectiveVisibility(GONE)))
             onView(withId(R.id.vpn_status)).check(matches(withEffectiveVisibility(GONE)))
             onView(withId(R.id.system_stats_panel)).check(matches(withEffectiveVisibility(GONE)))
@@ -970,8 +1068,6 @@ class HomeAndSettingsFlowTest {
 
     private fun completedConfig(selectedPackages: List<String> = emptyList()) = LauncherConfig(
         firstRunComplete = true,
-        wifiLabel = "",
-        locationLabel = "",
         favoriteItemIds = selectedPackages.map(HomeItemId::app),
     )
 

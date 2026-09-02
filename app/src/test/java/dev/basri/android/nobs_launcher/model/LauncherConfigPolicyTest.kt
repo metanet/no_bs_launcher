@@ -7,6 +7,7 @@ class LauncherConfigPolicyTest {
     @Test
     fun defaultConfigurationShowsPanelsWithNoFavoritesOrShortcuts() {
         assertEquals("", LauncherConfig.DEFAULT.welcomeText)
+        assertEquals(true, LauncherConfig.DEFAULT.showWifiName)
         assertEquals(true, LauncherConfig.DEFAULT.showLocation)
         assertEquals(true, LauncherConfig.DEFAULT.showVpnStatus)
         assertEquals(true, LauncherConfig.DEFAULT.showSystemStats)
@@ -82,8 +83,6 @@ class LauncherConfigPolicyTest {
         shortcuts: List<WebShortcut> = emptyList(),
     ) = LauncherConfig(
         firstRunComplete = true,
-        wifiLabel = "Kahveci House",
-        locationLabel = "London",
         favoriteItemIds = favorites,
         shortcuts = shortcuts,
     )

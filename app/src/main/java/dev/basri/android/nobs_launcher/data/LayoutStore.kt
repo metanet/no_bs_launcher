@@ -47,13 +47,12 @@ class LayoutStore(context: Context) : LauncherConfigStore {
         }
         val config = LauncherConfig(
             firstRunComplete = preferences.getBoolean(KEY_FIRST_RUN_COMPLETE, false),
-            wifiLabel = preferences.getString(KEY_WIFI_LABEL, "").orEmpty(),
-            locationLabel = preferences.getString(KEY_LOCATION_LABEL, "").orEmpty(),
             favoriteItemIds = favoriteItemIds,
             shortcuts = WebShortcutCodec.decode(
                 preferences.getString(KEY_WEB_SHORTCUTS, "").orEmpty(),
             ),
             welcomeText = preferences.getString(KEY_WELCOME_TEXT, "").orEmpty(),
+            showWifiName = preferences.getBoolean(KEY_SHOW_WIFI_NAME, true),
             showLocation = preferences.getBoolean(KEY_SHOW_LOCATION, true),
             showVpnStatus = preferences.getBoolean(KEY_SHOW_VPN_STATUS, true),
             showSystemStats = preferences.getBoolean(KEY_SHOW_SYSTEM_STATS, true),
@@ -66,16 +65,25 @@ class LayoutStore(context: Context) : LauncherConfigStore {
 
     private fun saveUnlocked(config: LauncherConfig): Boolean = preferences.edit()
         .putBoolean(KEY_FIRST_RUN_COMPLETE, config.firstRunComplete)
-        .putString(KEY_WIFI_LABEL, config.wifiLabel.trim())
-        .putString(KEY_LOCATION_LABEL, config.locationLabel.trim())
         .putString(KEY_FAVORITE_ITEM_IDS, HomeItemIdCodec.encode(config.favoriteItemIds))
         .putString(KEY_WEB_SHORTCUTS, WebShortcutCodec.encode(config.shortcuts))
         .putString(KEY_WELCOME_TEXT, config.welcomeText.trim())
+        .putBoolean(KEY_SHOW_WIFI_NAME, config.showWifiName)
         .putBoolean(KEY_SHOW_LOCATION, config.showLocation)
         .putBoolean(KEY_SHOW_VPN_STATUS, config.showVpnStatus)
         .putBoolean(KEY_SHOW_SYSTEM_STATS, config.showSystemStats)
+        .remove(KEY_WIFI_LABEL)
+        .remove(KEY_LOCATION_LABEL)
         .remove(KEY_SELECTED_PACKAGES)
         .commit()
+
+    fun hasRequestedWifiPermission(): Boolean = synchronized(PROCESS_LOCK) {
+        preferences.getBoolean(KEY_WIFI_PERMISSION_REQUESTED, false)
+    }
+
+    fun markWifiPermissionRequested(): Boolean = synchronized(PROCESS_LOCK) {
+        preferences.edit().putBoolean(KEY_WIFI_PERMISSION_REQUESTED, true).commit()
+    }
 
     fun clear(): Boolean = synchronized(PROCESS_LOCK) {
         preferences.edit().clear().commit()
@@ -91,8 +99,10 @@ class LayoutStore(context: Context) : LauncherConfigStore {
         private const val KEY_WIFI_LABEL = "wifi_label"
         private const val KEY_LOCATION_LABEL = "location_label"
         private const val KEY_WELCOME_TEXT = "welcome_text"
+        private const val KEY_SHOW_WIFI_NAME = "show_wifi_name"
         private const val KEY_SHOW_LOCATION = "show_location"
         private const val KEY_SHOW_VPN_STATUS = "show_vpn_status"
         private const val KEY_SHOW_SYSTEM_STATS = "show_system_stats"
+        private const val KEY_WIFI_PERMISSION_REQUESTED = "wifi_permission_requested"
     }
 }

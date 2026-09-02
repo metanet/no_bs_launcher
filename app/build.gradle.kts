@@ -1,4 +1,7 @@
 import java.io.FileInputStream
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Properties
 
 plugins {
@@ -14,6 +17,31 @@ if (keystorePropertiesFile.exists()) {
 val releaseStorePassword = System.getenv("NOBS_LAUNCHER_KEYSTORE_PASSWORD")
 val releaseKeyPassword = System.getenv("NOBS_LAUNCHER_KEY_PASSWORD") ?: releaseStorePassword
 val hasReleaseSigning = keystorePropertiesFile.exists() && !releaseStorePassword.isNullOrBlank()
+val gitRevision = providers.exec {
+    commandLine("git", "rev-parse", "--short=12", "HEAD")
+    workingDir(rootProject.projectDir)
+    isIgnoreExitValue = true
+}.standardOutput.asText.get().trim().ifBlank { "unknown" }
+val hasWorkspaceChanges = providers.exec {
+    commandLine("git", "status", "--porcelain", "--untracked-files=normal")
+    workingDir(rootProject.projectDir)
+    isIgnoreExitValue = true
+}.standardOutput.asText.get().isNotBlank()
+val buildGitHash = if (gitRevision == "unknown" || !hasWorkspaceChanges) {
+    gitRevision
+} else {
+    "$gitRevision-dirty"
+}
+val buildInstant = System.getenv("SOURCE_DATE_EPOCH")
+    ?.toLongOrNull()
+    ?.let(Instant::ofEpochSecond)
+    ?: Instant.now()
+val buildDateUtc = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'")
+    .withZone(ZoneOffset.UTC)
+    .format(buildInstant)
+
+fun buildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
     namespace = "dev.basri.android.nobs_launcher"
@@ -23,9 +51,11 @@ android {
         applicationId = "dev.basri.android.nobs_launcher"
         minSdk = 23
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.3.3"
+        versionCode = 9
+        versionName = "0.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "BUILD_GIT_HASH", buildConfigString(buildGitHash))
+        buildConfigField("String", "BUILD_DATE_UTC", buildConfigString(buildDateUtc))
     }
 
     signingConfigs {
@@ -63,6 +93,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         viewBinding = true
     }
 

@@ -37,5 +37,6 @@ data class SystemStatsDisplay(
     val memory: String,
     val cpu: String,
     val storage: String,
-    val network: String,
+    val networkIngress: String,
+    val networkEgress: String,
 )

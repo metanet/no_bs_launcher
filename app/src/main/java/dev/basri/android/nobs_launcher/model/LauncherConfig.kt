@@ -2,11 +2,10 @@ package dev.basri.android.nobs_launcher.model
 
 data class LauncherConfig(
     val firstRunComplete: Boolean,
-    val wifiLabel: String,
-    val locationLabel: String,
     val favoriteItemIds: List<String>,
     val shortcuts: List<WebShortcut> = emptyList(),
     val welcomeText: String = "",
+    val showWifiName: Boolean = true,
     val showLocation: Boolean = true,
     val showVpnStatus: Boolean = true,
     val showSystemStats: Boolean = true,
@@ -17,8 +16,6 @@ data class LauncherConfig(
     companion object {
         val DEFAULT = LauncherConfig(
             firstRunComplete = false,
-            wifiLabel = "",
-            locationLabel = "",
             favoriteItemIds = emptyList(),
         )
     }
