@@ -23,8 +23,8 @@ android {
         applicationId = "dev.basri.android.nobs_launcher"
         minSdk = 23
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.0"
+        versionCode = 7
+        versionName = "0.3.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

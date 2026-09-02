@@ -44,11 +44,24 @@ address. A shortcut appears as a normal Home tile and opens through Android's
 default web browser. New shortcuts begin in the alphabetical section and can
 be promoted to Favorites from their Home long-press menu.
 
-At save time only, the launcher asks the configured website origin for
-`/favicon.ico`. It stores a validated, size-bounded PNG in the launcher's
-private directory, or shows the bundled globe when the request fails. It does
-not use a third-party icon service, send cookies, refresh icons in the
-background, or contact saved sites merely because Home is open.
+Saving a shortcut first normalizes the user-configured HTTP(S) page and sends a
+direct GET. While this check runs, **Checking website...** is shown; Save, the
+name field, and the URL field are disabled, while Cancel remains available.
+Only 2xx, 401, and 403 responses are considered reachable. If the page is not
+accessible, the editor stays open, controls are re-enabled, and **Website is
+not accessible.** is shown inline on the URL. Nothing is persisted and an
+existing shortcut's metadata, favorite state, and icon are unchanged.
+
+For a reachable page, the shortcut is persisted even if favicon discovery or
+download fails; the tile then uses the bundled globe fallback. Icon candidates
+are, in order: declared `rel=icon` or `rel=shortcut icon` candidates in
+document order, then declared Apple touch-icon candidates, with at most five
+declared candidates total, followed by the final page origin's
+`/favicon.ico`. Initial requests go only to the configured page and these
+declared candidate URLs (plus that final-page origin fallback); bounded
+HTTP(S) redirects may contact their HTTP(S) redirect targets. There is no
+third-party icon service. Icons are fetched only as part of saving or changing
+a shortcut, never by page JavaScript, a WebView, or a background refresh.
 
 ## First launch and Home selection
 
@@ -110,8 +123,10 @@ Do not uninstall either launcher to switch between them.
 ## Verified release
 
 - APK: `app/build/outputs/apk/release/app-release.apk`
-- Size: 233,060 bytes
-- Version: `0.3.0` (`versionCode=4`)
+- Size: 464,601 bytes
+- Version: `0.3.3` (`versionCode=7`)
+- APK SHA-256:
+  `8ada6710295ede46006728c0f211c902772a27aee708c4853ab665236885f26a`
 - Minimum Android: 6.0 / API 23
 - Signing certificate SHA-256:
   `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`
@@ -121,10 +136,21 @@ Do not uninstall either launcher to switch between them.
 The release requests only `android.permission.ACCESS_NETWORK_STATE`,
 `android.permission.INTERNET`, and
 `android.permission.REQUEST_DELETE_PACKAGES`. Internet access is used only for
-the user-triggered, direct-origin favicon request described above. The launcher
-has no location, analytics, notification-listener, accessibility, or broad
-package-query permission. Labels, URLs, favorites, and favicon files remain in
-app-private local storage with Android backup and device transfer disabled.
+the user-triggered website check and favicon requests described above. Runtime
+HTTP uses OkHttp `5.4.0`. Requests use no cookies, HTTP authentication,
+proxy authentication, or response cache. There is no page JavaScript, WebView,
+or background refresh. Page HTML is read up to 256 KiB; page checking allows at
+most five redirects, 4 seconds per connection/read operation, and 12 seconds
+overall across redirects. Icon responses up to 256 KiB are accepted; each icon
+request allows at most five redirects and has a hard 4-second limit. HTTP and
+HTTPS are the only schemes; cleartext HTTP is deliberately permitted for
+user-configured HTTP destinations, their icon URLs, and any HTTP redirect
+targets reached from HTTP or HTTPS initial requests.
+
+The launcher has no location, analytics, notification-listener, accessibility,
+or broad package-query permission. Labels, URLs, favorites, and favicon files
+remain in app-private local storage with Android backup and device transfer
+disabled.
 
 VPN status is provider-neutral. The launcher displays `VPN connected` whenever
 Android reports an active VPN transport and the panel is enabled. It does not

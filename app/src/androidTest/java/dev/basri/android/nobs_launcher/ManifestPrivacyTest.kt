@@ -41,11 +41,11 @@ class ManifestPrivacyTest {
     }
 
     @Test
-    fun packageVersionIsZeroPointThreeCodeFour() {
+    fun packageVersionIsZeroPointThreeThreeCodeSeven() {
         val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
 
-        assertEquals("0.3.0-debug", packageInfo.versionName)
-        assertEquals(4L, packageInfo.longVersionCode)
+        assertEquals("0.3.3-debug", packageInfo.versionName)
+        assertEquals(7L, packageInfo.longVersionCode)
     }
 
     @Test
