@@ -11,20 +11,22 @@ import java.io.File
 class SystemStatsReader(context: Context) {
     private val activityManager = context.applicationContext
         .getSystemService(ActivityManager::class.java)
+    private val cpuCount = Runtime.getRuntime().availableProcessors().coerceAtLeast(0)
+    private val cpuMaxFrequencyHz: Long? by lazy { readMaxCpuFrequency(cpuCount) }
 
     fun read(): RawSystemStats {
         val memory = readMemory()
         val storage = readStorage()
-        val cpuCount = Runtime.getRuntime().availableProcessors().coerceAtLeast(0)
+        val cpuCounters = readCpuCounters()
         return RawSystemStats(
             totalMemoryBytes = memory?.totalMem ?: 0L,
             availableMemoryBytes = memory?.availMem ?: 0L,
             totalStorageBytes = storage?.first ?: 0L,
             availableStorageBytes = storage?.second ?: 0L,
             cpuCount = cpuCount,
-            cpuMaxFrequencyHz = readMaxCpuFrequency(cpuCount),
-            cpuCounters = readCpuCounters(),
-            cpuIdleCounters = readCpuIdleCounters(cpuCount),
+            cpuMaxFrequencyHz = cpuMaxFrequencyHz,
+            cpuCounters = cpuCounters,
+            cpuIdleCounters = if (cpuCounters == null) readCpuIdleCounters(cpuCount) else null,
             networkCounters = readNetworkCounters(),
         )
     }

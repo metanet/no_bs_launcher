@@ -2,9 +2,20 @@ package dev.basri.android.nobs_launcher.stats
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SystemStatsPolicyTest {
+    @Test
+    fun monitorPublishesOnlyChangedDisplayValues() {
+        val display = SystemStatsDisplay("memory", "cpu", "storage", "in", "out")
+
+        assertTrue(shouldPublishStats(previous = null, current = display))
+        assertFalse(shouldPublishStats(previous = display, current = display))
+        assertTrue(shouldPublishStats(previous = display, current = display.copy(cpu = "new")))
+    }
+
     @Test
     fun cpuidleCpuUsageUsesIdleTimeAndLogicalCpuCapacity() {
         assertEquals(

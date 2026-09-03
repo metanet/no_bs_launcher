@@ -7,6 +7,11 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
+internal fun shouldPublishStats(
+    previous: SystemStatsDisplay?,
+    current: SystemStatsDisplay,
+): Boolean = current != previous
+
 class SystemStatsMonitor(
     context: Context,
     private val onStatsChanged: (SystemStatsDisplay) -> Unit,
@@ -16,6 +21,7 @@ class SystemStatsMonitor(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var executor: ScheduledExecutorService? = null
     private var previous: RawSystemStats? = null
+    private var previousDisplay: SystemStatsDisplay? = null
     @Volatile
     private var started = false
 
@@ -23,6 +29,7 @@ class SystemStatsMonitor(
         if (started) return
         started = true
         previous = null
+        previousDisplay = null
         executor = Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "nobs-system-stats").apply { isDaemon = true }
         }.also { worker ->
@@ -41,6 +48,7 @@ class SystemStatsMonitor(
         executor?.shutdownNow()
         executor = null
         previous = null
+        previousDisplay = null
         mainHandler.removeCallbacksAndMessages(null)
     }
 
@@ -49,12 +57,14 @@ class SystemStatsMonitor(
         val current = reader.read()
         val display = SystemStatsPolicy.display(previous, current)
         previous = current
+        if (!shouldPublishStats(previousDisplay, display)) return
+        previousDisplay = display
         mainHandler.post {
             if (started) onStatsChanged(display)
         }
     }
 
     private companion object {
-        const val DEFAULT_SAMPLE_INTERVAL_MILLIS = 2_000L
+        const val DEFAULT_SAMPLE_INTERVAL_MILLIS = 5_000L
     }
 }

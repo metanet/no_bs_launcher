@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.basri.android.nobs_launcher.stats.SystemStatsPolicy
 import dev.basri.android.nobs_launcher.stats.SystemStatsReader
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -28,6 +29,7 @@ class SystemStatsReaderTest {
         first.cpuCounters?.let { counters ->
             assertTrue(counters.idleTicks >= 0)
             assertTrue(counters.totalTicks >= counters.idleTicks)
+            assertNull(first.cpuIdleCounters)
         }
         first.cpuIdleCounters?.let { counters ->
             assertTrue(counters.idleMicros >= 0)
