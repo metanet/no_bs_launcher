@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.data.LayoutStore
+import dev.basri.android.nobs_launcher.data.LauncherServices
 import dev.basri.android.nobs_launcher.data.SaveShortcutRequest
 import dev.basri.android.nobs_launcher.data.SaveShortcutResult
 import dev.basri.android.nobs_launcher.data.WebShortcutService
@@ -35,7 +36,7 @@ class WebShortcutsActivity : Activity() {
         setContentView(binding.root)
 
         store = LayoutStore(this)
-        favicons = FaviconRepository(this)
+        favicons = LauncherServices.favicons(this)
         service = WebShortcutService(store, favicons)
         adapter = WebShortcutsAdapter(
             favicons = favicons,
@@ -71,7 +72,6 @@ class WebShortcutsActivity : Activity() {
     override fun onDestroy() {
         activeSaveRequest?.cancel()
         activeSaveRequest = null
-        favicons.close()
         super.onDestroy()
     }
 

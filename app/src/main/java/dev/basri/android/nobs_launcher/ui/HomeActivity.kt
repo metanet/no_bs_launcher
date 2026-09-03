@@ -17,6 +17,7 @@ import dev.basri.android.nobs_launcher.data.AppCatalog
 import dev.basri.android.nobs_launcher.data.CatalogRequest
 import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.data.LayoutStore
+import dev.basri.android.nobs_launcher.data.LauncherServices
 import dev.basri.android.nobs_launcher.data.WebShortcutService
 import dev.basri.android.nobs_launcher.databinding.ActivityHomeBinding
 import dev.basri.android.nobs_launcher.model.HomeItem
@@ -61,7 +62,7 @@ class HomeActivity : Activity() {
         store = LayoutStore(this)
         systemLabelReader = SystemLabelReader(this)
         catalog = AppCatalog.shared(this)
-        favicons = FaviconRepository(this)
+        favicons = LauncherServices.favicons(this)
         shortcutService = WebShortcutService(store, favicons)
         adapter = AppGridAdapter(
             favicons = favicons,
@@ -117,11 +118,6 @@ class HomeActivity : Activity() {
         vpnStatusMonitor.stop()
         clockController.stop()
         super.onStop()
-    }
-
-    override fun onDestroy() {
-        favicons.close()
-        super.onDestroy()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
