@@ -14,6 +14,8 @@ import okio.Buffer
 
 fun interface FaviconBytesFetcher {
     fun fetch(iconUrl: String): ByteArray?
+
+    fun fetch(iconUrl: String, timeoutMillis: Long): ByteArray? = fetch(iconUrl)
 }
 
 internal fun newFaviconOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
@@ -39,8 +41,11 @@ class FaviconHttpFetcher(
     private val monotonicClockMillis: () -> Long = { System.nanoTime() / NANOS_PER_MILLISECOND },
     private val overallTimeoutMillis: Long = TIMEOUT_MILLIS,
 ) : FaviconBytesFetcher {
-    override fun fetch(iconUrl: String): ByteArray? {
-        if (maxBytes <= 0 || maxRedirects < 0 || overallTimeoutMillis <= 0L) return null
+    override fun fetch(iconUrl: String): ByteArray? = fetch(iconUrl, overallTimeoutMillis)
+
+    override fun fetch(iconUrl: String, timeoutMillis: Long): ByteArray? {
+        val effectiveTimeoutMillis = minOf(timeoutMillis, overallTimeoutMillis)
+        if (maxBytes <= 0 || maxRedirects < 0 || effectiveTimeoutMillis <= 0L) return null
         var currentUrl = iconUrl.toHttpUrlOrNull() ?: return null
         val networkAccess = initialNetworkAccess(currentUrl)
         var redirects = 0
@@ -57,12 +62,12 @@ class FaviconHttpFetcher(
                     .build()
                 val call = callFactory.newCall(request)
                 call.timeout().timeout(
-                    remainingTimeoutMillis(startedAtMillis),
+                    remainingTimeoutMillis(startedAtMillis, effectiveTimeoutMillis),
                     TimeUnit.MILLISECONDS,
                 )
 
                 val nextUrl: HttpUrl? = call.execute().use { response ->
-                    remainingTimeoutMillis(startedAtMillis)
+                    remainingTimeoutMillis(startedAtMillis, effectiveTimeoutMillis)
                     if (response.code in 300..399) {
                         if (redirects >= maxRedirects) return null
                         val location = response.header("Location") ?: return null
@@ -75,7 +80,7 @@ class FaviconHttpFetcher(
 
                     val body = response.body
                     if (body.contentLength() > maxBytes) return null
-                    return readBounded(body, startedAtMillis)
+                    return readBounded(body, startedAtMillis, effectiveTimeoutMillis)
                 }
                 currentUrl = nextUrl ?: return null
                 redirects += 1
@@ -85,14 +90,18 @@ class FaviconHttpFetcher(
         }
     }
 
-    private fun readBounded(body: ResponseBody, startedAtMillis: Long): ByteArray? {
+    private fun readBounded(
+        body: ResponseBody,
+        startedAtMillis: Long,
+        timeoutMillis: Long,
+    ): ByteArray? {
         val output = Buffer()
         val source = body.source()
         var remainingBytes = maxBytes.toLong() + 1L
         while (remainingBytes > 0L) {
-            remainingTimeoutMillis(startedAtMillis)
+            remainingTimeoutMillis(startedAtMillis, timeoutMillis)
             val read = source.read(output, minOf(BUFFER_SIZE.toLong(), remainingBytes))
-            remainingTimeoutMillis(startedAtMillis)
+            remainingTimeoutMillis(startedAtMillis, timeoutMillis)
             if (read < 0L) break
             if (read == 0L) continue
             remainingBytes -= read
@@ -101,12 +110,12 @@ class FaviconHttpFetcher(
             .takeIf { it.isNotEmpty() && it.size <= maxBytes }
     }
 
-    private fun remainingTimeoutMillis(startedAtMillis: Long): Long {
+    private fun remainingTimeoutMillis(startedAtMillis: Long, timeoutMillis: Long): Long {
         val elapsedMillis = monotonicClockMillis() - startedAtMillis
         val remainingMillis = when {
-            elapsedMillis <= 0L -> overallTimeoutMillis
-            elapsedMillis >= overallTimeoutMillis -> 0L
-            else -> overallTimeoutMillis - elapsedMillis
+            elapsedMillis <= 0L -> timeoutMillis
+            elapsedMillis >= timeoutMillis -> 0L
+            else -> timeoutMillis - elapsedMillis
         }
         if (remainingMillis <= 0L) throw SocketTimeoutException("Favicon fetch deadline exceeded")
         return remainingMillis

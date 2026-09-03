@@ -169,6 +169,41 @@ class FaviconRepositoryTest {
         assertNull(completion)
     }
 
+    @Test
+    fun oneDeadlineIsSharedAcrossAllCandidates() {
+        val requested = mutableListOf<String>()
+        val timeouts = mutableListOf<Long>()
+        var nowMillis = 0L
+        val fetcher = object : FaviconBytesFetcher {
+            override fun fetch(iconUrl: String): ByteArray? = error("timed overload expected")
+
+            override fun fetch(iconUrl: String, timeoutMillis: Long): ByteArray? {
+                requested += iconUrl
+                timeouts += timeoutMillis
+                nowMillis += 3_000L
+                return byteArrayOf(1, 2, 3)
+            }
+        }
+        val candidateRepository = FaviconRepository(
+            context = context,
+            fetcher = fetcher,
+            executor = Executor(Runnable::run),
+            monotonicClockMillis = { nowMillis },
+            overallFetchTimeoutMillis = 5_000L,
+        )
+
+        candidateRepository.fetchAndStore(
+            WebShortcut(UUID, "Example", "https://example.com/page"),
+            listOf("https://example.com/one", "https://example.com/two", "https://example.com/three"),
+        ) {}
+
+        assertEquals(
+            listOf("https://example.com/one", "https://example.com/two"),
+            requested,
+        )
+        assertEquals(listOf(5_000L, 2_000L), timeouts)
+    }
+
     private companion object {
         const val UUID = "11111111-1111-4111-8111-111111111111"
         const val INVALID_CANDIDATE = "https://example.com/invalid.svg"

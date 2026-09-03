@@ -17,6 +17,8 @@ class FaviconRepository(
     context: Context,
     private val fetcher: FaviconBytesFetcher = FaviconHttpFetcher(),
     private val executor: Executor = Executors.newSingleThreadExecutor(),
+    private val monotonicClockMillis: () -> Long = { System.nanoTime() / 1_000_000L },
+    private val overallFetchTimeoutMillis: Long = DEFAULT_FETCH_TIMEOUT_MILLIS,
 ) : FaviconGateway, AutoCloseable {
     private val directory = File(context.applicationContext.filesDir, DIRECTORY_NAME)
 
@@ -30,11 +32,18 @@ class FaviconRepository(
         onComplete: (String?) -> Unit,
     ) {
         executor.execute {
+            val startedAtMillis = monotonicClockMillis()
             val fileName = try {
-                candidates.firstNotNullOfOrNull { candidate ->
-                    fetcher.fetch(candidate)
+                var stored: String? = null
+                for (candidate in candidates) {
+                    val remainingMillis = overallFetchTimeoutMillis -
+                        (monotonicClockMillis() - startedAtMillis)
+                    if (remainingMillis <= 0L) break
+                    stored = fetcher.fetch(candidate, remainingMillis)
                         ?.let { bytes -> store(shortcut.uuid, shortcut.url, bytes) }
+                    if (stored != null) break
                 }
+                stored
             } catch (_: Exception) {
                 null
             }
@@ -126,6 +135,7 @@ class FaviconRepository(
         private const val MAX_OUTPUT_DIMENSION = 256
         private const val MAX_SOURCE_DIMENSION = 8_192
         private const val MAX_SOURCE_PIXELS = 16_777_216L
+        private const val DEFAULT_FETCH_TIMEOUT_MILLIS = 8_000L
         private const val HASH_BYTES = 8
         private val SAFE_FILE_NAME = Regex("[A-Za-z0-9._-]+")
 
