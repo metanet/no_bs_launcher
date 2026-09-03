@@ -3,7 +3,9 @@ package dev.basri.android.nobs_launcher.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.util.LruCache
 import dev.basri.android.nobs_launcher.model.WebShortcut
 import java.io.File
 import java.io.FileOutputStream
@@ -17,10 +19,17 @@ class FaviconRepository(
     context: Context,
     private val fetcher: FaviconBytesFetcher = FaviconHttpFetcher(),
     private val executor: Executor = Executors.newSingleThreadExecutor(),
+    private val decodeExecutor: Executor = Executors.newFixedThreadPool(2),
+    private val bitmapDecoder: (String) -> Bitmap? = BitmapFactory::decodeFile,
     private val monotonicClockMillis: () -> Long = { System.nanoTime() / 1_000_000L },
     private val overallFetchTimeoutMillis: Long = DEFAULT_FETCH_TIMEOUT_MILLIS,
 ) : FaviconGateway, AutoCloseable {
+    private val resources = context.applicationContext.resources
     private val directory = File(context.applicationContext.filesDir, DIRECTORY_NAME)
+    private val bitmapCache = object : LruCache<String, Bitmap>(CACHE_SIZE_KILOBYTES) {
+        override fun sizeOf(key: String, value: Bitmap): Int =
+            maxOf(1, value.allocationByteCount / BYTES_PER_KILOBYTE)
+    }
 
     /**
      * Fetches and stores on [executor], then invokes [onComplete] exactly once on that same
@@ -95,21 +104,41 @@ class FaviconRepository(
         temporary.delete()
         if (output !== decoded) output.recycle()
         decoded.recycle()
+        if (stored) bitmapCache.remove(fileName)
         return fileName.takeIf { stored }
     }
 
-    fun load(fileName: String?): Drawable? {
-        val file = fileName?.let(::safeFile)?.takeIf(File::isFile) ?: return null
-        return Drawable.createFromPath(file.absolutePath)
+    fun loadAsync(fileName: String?, onComplete: (Drawable?) -> Unit): FaviconLoadRequest {
+        val request = FaviconLoadRequest()
+        val validFileName = fileName?.takeIf { safeFile(it) != null }
+        if (validFileName == null) {
+            request.deliver(null, onComplete)
+            return request
+        }
+        bitmapCache.get(validFileName)?.let { cached ->
+            request.deliver(BitmapDrawable(resources, cached), onComplete)
+            return request
+        }
+        decodeExecutor.execute {
+            val file = safeFile(validFileName)?.takeIf(File::isFile)
+            val bitmap = file?.let { bitmapDecoder(it.absolutePath) }
+            if (bitmap != null) bitmapCache.put(validFileName, bitmap)
+            request.deliver(bitmap?.let { BitmapDrawable(resources, it) }, onComplete)
+        }
+        return request
     }
 
     override fun delete(fileName: String) {
+        bitmapCache.remove(fileName)
         safeFile(fileName)?.delete()
         safeFile("$fileName.tmp")?.delete()
     }
 
     override fun close() {
         (executor as? ExecutorService)?.shutdownNow()
+        if (decodeExecutor !== executor) {
+            (decodeExecutor as? ExecutorService)?.shutdownNow()
+        }
     }
 
     private fun scaleDown(source: Bitmap): Bitmap {
@@ -137,6 +166,8 @@ class FaviconRepository(
         private const val MAX_SOURCE_PIXELS = 16_777_216L
         private const val DEFAULT_FETCH_TIMEOUT_MILLIS = 8_000L
         private const val HASH_BYTES = 8
+        private const val CACHE_SIZE_KILOBYTES = 4 * 1_024
+        private const val BYTES_PER_KILOBYTE = 1_024
         private val SAFE_FILE_NAME = Regex("[A-Za-z0-9._-]+")
 
         internal fun decodeSampleSizeFor(width: Int, height: Int): Int {
@@ -147,5 +178,18 @@ class FaviconRepository(
             }
             return sampleSize
         }
+    }
+}
+
+class FaviconLoadRequest internal constructor() {
+    @Volatile
+    private var canceled = false
+
+    fun cancel() {
+        canceled = true
+    }
+
+    internal fun deliver(drawable: Drawable?, callback: (Drawable?) -> Unit) {
+        if (!canceled) callback(drawable)
     }
 }

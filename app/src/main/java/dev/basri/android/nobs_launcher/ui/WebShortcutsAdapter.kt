@@ -7,6 +7,7 @@ import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
+import dev.basri.android.nobs_launcher.data.FaviconLoadRequest
 import dev.basri.android.nobs_launcher.databinding.ItemWebShortcutBinding
 import dev.basri.android.nobs_launcher.model.WebShortcut
 import dev.basri.android.nobs_launcher.model.WebShortcutPolicy
@@ -46,23 +47,41 @@ class WebShortcutsAdapter(
 
     override fun getItemCount(): Int = shortcuts.size
 
+    override fun onViewRecycled(holder: ShortcutViewHolder) {
+        holder.recycle()
+        super.onViewRecycled(holder)
+    }
+
     inner class ShortcutViewHolder(
         private val binding: ItemWebShortcutBinding,
     ) : RecyclerView.ViewHolder(binding.root) {
+        private var faviconRequest: FaviconLoadRequest? = null
+        private var boundUuid: String? = null
+
         fun bind(shortcut: WebShortcut) {
+            boundUuid = shortcut.uuid
+            faviconRequest?.cancel()
             binding.shortcutLabel.text = shortcut.name
             binding.shortcutAddress.text = WebShortcutPolicy.displayUrl(shortcut.url)
             binding.root.contentDescription = shortcut.name
-            val icon = favicons.load(shortcut.faviconFileName)
-            binding.shortcutIcon.scaleType = if (icon == null) {
-                ImageView.ScaleType.CENTER_INSIDE
-            } else {
-                ImageView.ScaleType.FIT_CENTER
+            binding.shortcutIcon.scaleType = ImageView.ScaleType.CENTER_INSIDE
+            binding.shortcutIcon.setImageResource(R.drawable.ic_web_shortcut)
+            faviconRequest = favicons.loadAsync(shortcut.faviconFileName) { icon ->
+                binding.root.post {
+                    if (boundUuid == shortcut.uuid && icon != null) {
+                        binding.shortcutIcon.scaleType = ImageView.ScaleType.FIT_CENTER
+                        binding.shortcutIcon.setImageDrawable(icon)
+                    }
+                }
             }
-            binding.shortcutIcon.setImageDrawable(icon)
-            if (icon == null) binding.shortcutIcon.setImageResource(R.drawable.ic_web_shortcut)
             binding.shortcutEdit.setOnClickListener { onEdit(shortcut) }
             binding.shortcutRemove.setOnClickListener { onRemove(shortcut) }
+        }
+
+        fun recycle() {
+            boundUuid = null
+            faviconRequest?.cancel()
+            faviconRequest = null
         }
     }
 }

@@ -2,6 +2,7 @@ package dev.basri.android.nobs_launcher
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.Drawable
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.basri.android.nobs_launcher.data.FaviconBytesFetcher
@@ -202,6 +203,35 @@ class FaviconRepositoryTest {
             requested,
         )
         assertEquals(listOf(5_000L, 2_000L), timeouts)
+    }
+
+    @Test
+    fun asynchronousLoadsDecodeOnceThenUseTheMemoryCache() {
+        val source = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        val bytes = ByteArrayOutputStream().use { output ->
+            source.compress(Bitmap.CompressFormat.PNG, 100, output)
+            output.toByteArray()
+        }
+        source.recycle()
+        var decodeCount = 0
+        val candidateRepository = FaviconRepository(
+            context = context,
+            executor = Executor(Runnable::run),
+            decodeExecutor = Executor(Runnable::run),
+            bitmapDecoder = { path ->
+                decodeCount += 1
+                BitmapFactory.decodeFile(path)
+            },
+        )
+        val fileName = checkNotNull(candidateRepository.store(UUID, "https://example.com", bytes))
+        val loaded = mutableListOf<Drawable?>()
+
+        candidateRepository.loadAsync(fileName) { loaded += it }
+        candidateRepository.loadAsync(fileName) { loaded += it }
+
+        assertEquals(2, loaded.size)
+        assertTrue(loaded.all { it != null })
+        assertEquals(1, decodeCount)
     }
 
     private companion object {

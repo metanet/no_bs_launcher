@@ -7,6 +7,7 @@ import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.FaviconRepository
+import dev.basri.android.nobs_launcher.data.FaviconLoadRequest
 import dev.basri.android.nobs_launcher.databinding.ItemAppSeparatorBinding
 import dev.basri.android.nobs_launcher.databinding.ItemAppTileBinding
 import dev.basri.android.nobs_launcher.model.HomeItem
@@ -105,6 +106,11 @@ class AppGridAdapter(
 
     override fun getItemCount(): Int = items.size
 
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        (holder as? TileViewHolder)?.recycle()
+        super.onViewRecycled(holder)
+    }
+
     private fun notifyItemChangedById(itemId: String) {
         val index = positionOfItem(itemId)
         if (index >= 0) notifyItemChanged(index)
@@ -113,8 +119,14 @@ class AppGridAdapter(
     inner class TileViewHolder(
         private val binding: ItemAppTileBinding,
     ) : RecyclerView.ViewHolder(binding.root) {
+        private var faviconRequest: FaviconLoadRequest? = null
+        private var boundItemId: String? = null
+
         fun bind(gridItem: HomeGridItem.Tile) {
             val item = gridItem.item
+            boundItemId = item.id
+            faviconRequest?.cancel()
+            faviconRequest = null
             binding.appLabel.text = item.label
             when (item) {
                 is HomeItem.App -> {
@@ -125,15 +137,15 @@ class AppGridAdapter(
                     }
                 }
                 is HomeItem.Web -> {
-                    val favicon = favicons.load(item.shortcut.faviconFileName)
-                    binding.appArtwork.scaleType = if (favicon == null) {
-                        ImageView.ScaleType.CENTER_INSIDE
-                    } else {
-                        ImageView.ScaleType.FIT_CENTER
-                    }
-                    binding.appArtwork.setImageDrawable(favicon)
-                    if (favicon == null) {
-                        binding.appArtwork.setImageResource(R.drawable.ic_web_shortcut)
+                    binding.appArtwork.scaleType = ImageView.ScaleType.CENTER_INSIDE
+                    binding.appArtwork.setImageResource(R.drawable.ic_web_shortcut)
+                    faviconRequest = favicons.loadAsync(item.shortcut.faviconFileName) { favicon ->
+                        binding.root.post {
+                            if (boundItemId == item.id && favicon != null) {
+                                binding.appArtwork.scaleType = ImageView.ScaleType.FIT_CENTER
+                                binding.appArtwork.setImageDrawable(favicon)
+                            }
+                        }
                     }
                 }
             }
@@ -146,6 +158,12 @@ class AppGridAdapter(
                 onLongPress(item, gridItem.favorite)
                 true
             }
+        }
+
+        fun recycle() {
+            boundItemId = null
+            faviconRequest?.cancel()
+            faviconRequest = null
         }
     }
 
