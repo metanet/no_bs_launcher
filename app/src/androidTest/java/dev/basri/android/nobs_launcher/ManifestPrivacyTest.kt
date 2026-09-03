@@ -44,11 +44,11 @@ class ManifestPrivacyTest {
     }
 
     @Test
-    fun packageVersionIsZeroPointFourOneCodeNine() {
+    fun packageVersionMatchesAuditHardenedRelease() {
         val packageInfo = packageManager.getPackageInfo(context.packageName, 0)
 
-        assertEquals("0.4.1-debug", packageInfo.versionName)
-        assertEquals(9L, packageInfo.longVersionCode)
+        assertEquals("0.5.0-debug", packageInfo.versionName)
+        assertEquals(10L, packageInfo.longVersionCode)
     }
 
     @Test

@@ -51,8 +51,8 @@ android {
         applicationId = "dev.basri.android.nobs_launcher"
         minSdk = 23
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.4.1"
+        versionCode = 10
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BUILD_GIT_HASH", buildConfigString(buildGitHash))
         buildConfigField("String", "BUILD_DATE_UTC", buildConfigString(buildDateUtc))

@@ -138,11 +138,9 @@ Do not uninstall either launcher to switch between them.
 ## Verified release
 
 - APK: `app/build/outputs/apk/release/app-release.apk`
-- Size: 469,530 bytes
-- Version: `0.4.1` (`versionCode=9`)
-- APK SHA-256:
-  `ac9d517fad86f97e493b4977ec2bebd8ede0dccc0b2a2c7208574fb2b460bc45`
-- Embedded build identity: `ebf7b4e31116-dirty`, `2026-09-02 22:05 UTC`
+- Version: `0.5.0` (`versionCode=10`)
+- Verify the artifact SHA-256 with `shasum -a 256 app/build/outputs/apk/release/app-release.apk`.
+- Build identity is available from the launcher's **Build info** dialog.
 - Minimum Android: 6.0 / API 23
 - Signing certificate SHA-256:
   `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`
