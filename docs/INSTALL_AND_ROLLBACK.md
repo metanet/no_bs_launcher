@@ -82,15 +82,16 @@ shortcut save. Favicon fetching and image decoding are asynchronous and
 bounded, but are not treated as universally cancellable. There is no
 third-party icon service, WebView, page JavaScript, or background refresh.
 
-URLs containing credentials are rejected. The Home list hides query and
-fragment values, while storage and browser launch retain the full normalized
-URL. HTTPS requests may redirect only to HTTPS; a downgrade to HTTP is
-rejected. Starting from a public address rejects a redirect to a literal
-non-public address and rejects a non-public network peer, including a private
-DNS result. An explicitly entered local service using `localhost` or a literal
-non-public address is allowed to remain in local address space. Cleartext HTTP
-is used only when the user explicitly configures an HTTP shortcut. These same
-redirect and peer checks protect the favicon request.
+URLs containing embedded HTTP userinfo (a username or password) are rejected.
+The Web Shortcuts list redacts query and fragment values, while storage,
+editing, and browser launch retain the full normalized URL. HTTPS requests may
+redirect only to HTTPS; a downgrade to HTTP is rejected. Starting from a
+public address rejects a redirect to a literal non-public address and rejects
+a non-public network peer, including a private DNS result. An explicitly
+entered local service using `localhost` or a literal non-public address is
+allowed to remain in local address space. Cleartext HTTP is used only when the
+user explicitly configures an HTTP shortcut. These same redirect and peer
+checks protect the favicon request.
 
 ## First launch and Home selection
 

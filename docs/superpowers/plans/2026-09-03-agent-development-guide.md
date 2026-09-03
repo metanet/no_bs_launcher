@@ -73,9 +73,10 @@ review, and explicit source-control handoff.
 
 - [x] **Step 3: Add review and definition-of-done guidance**
 
-Require evidence for lint, both unit variants, builds, connected tests when
-relevant, data preservation, privacy/performance review, documentation, and
-clean source-control state. Include a realistic non-destructive feature prompt.
+Require evidence for lint, both unit variants, builds, and connected tests when
+relevant. Require data-preservation evidence when an install or persisted state
+is affected, plus privacy/performance review, documentation, and clean
+source-control state. Include a realistic non-destructive feature prompt.
 
 ### Task 3: Link the guides from the README
 

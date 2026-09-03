@@ -113,6 +113,7 @@ between packages or introduce shared mutable state without a documented need.
   and vendor package or component details. Use placeholders such as
   `<device-serial>` and `<stock-home-package>`.
 - Clearly labeled documentation examples may use reserved synthetic values. A
-  test may use a private-address literal only when its transport cannot perform
-  real I/O, and may use loopback only with a server owned by that test. Such
-  fixtures must never identify or contact a real device or network endpoint.
+  test may use a private-address literal when it is display-only or its fake
+  transport cannot perform real I/O. Actual loopback I/O must use a server
+  owned by that test. Such fixtures must never identify or contact a real
+  device or network endpoint.

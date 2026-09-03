@@ -98,12 +98,12 @@ Never paste real passwords, tokens, private keys, signing material, keystore
 paths, private IP addresses, Wi-Fi names, device secrets, or vendor package
 details into an agent prompt or log. Use placeholders and redact copied output.
 Reserved synthetic values may be used in documentation. Private-address test
-fixtures must use a fake transport incapable of real I/O, except for loopback
-servers owned by the test; they must never identify or contact a real device.
-Do not derive fixtures from deployed values or ask an agent to print credential
-stores or environment variables. If a task truly needs a protected value, keep
-it in the existing secret store and grant the smallest explicit operation that
-can use it without displaying it.
+fixtures may be display-only or use a fake transport incapable of real I/O;
+actual loopback I/O must use a server owned by the test. Fixtures must never
+identify or contact a real device. Do not derive them from deployed values or
+ask an agent to print credential stores or environment variables. If a task
+truly needs a protected value, keep it in the existing secret store and grant
+the smallest explicit operation that can use it without displaying it.
 
 New network behavior must remain user-triggered and bounded. It must reuse the
 repository's URL, redirect, scheme, DNS-rebinding, and private-network policy;
