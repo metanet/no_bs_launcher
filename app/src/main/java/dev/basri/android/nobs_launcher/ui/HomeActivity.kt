@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.GridLayoutManager
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.AppCandidate
 import dev.basri.android.nobs_launcher.data.AppCatalog
+import dev.basri.android.nobs_launcher.data.CatalogRequest
 import dev.basri.android.nobs_launcher.data.FaviconRepository
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.data.WebShortcutService
@@ -47,6 +48,7 @@ class HomeActivity : Activity() {
     private var movingItemId: String? = null
     private var swallowKeyUp: Int? = null
     private var showVpnStatus = false
+    private var catalogRequest: CatalogRequest? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val hideLaunchError = Runnable { binding.launchError.visibility = View.GONE }
 
@@ -58,7 +60,7 @@ class HomeActivity : Activity() {
 
         store = LayoutStore(this)
         systemLabelReader = SystemLabelReader(this)
-        catalog = AppCatalog(this)
+        catalog = AppCatalog.shared(this)
         favicons = FaviconRepository(this)
         shortcutService = WebShortcutService(store, favicons)
         adapter = AppGridAdapter(
@@ -108,6 +110,8 @@ class HomeActivity : Activity() {
     }
 
     override fun onStop() {
+        catalogRequest?.cancel()
+        catalogRequest = null
         mainHandler.removeCallbacks(hideLaunchError)
         systemStatsMonitor.stop()
         vpnStatusMonitor.stop()
@@ -165,13 +169,24 @@ class HomeActivity : Activity() {
     }
 
     private fun bindHome(preferredFocusItemId: String? = currentFocusedItemId()) {
-        val catalogApps = catalog.loadApps()
         var normalized: LauncherConfig? = null
         store.update { current ->
             LauncherConfigPolicy.normalize(current).also { normalized = it }
         }
         val currentConfig = normalized ?: LauncherConfigPolicy.normalize(store.load())
+        catalogRequest?.cancel()
+        catalogRequest = catalog.loadApps { catalogApps ->
+            if (!isFinishing && !isDestroyed) {
+                renderHome(catalogApps, currentConfig, preferredFocusItemId)
+            }
+        }
+    }
 
+    private fun renderHome(
+        catalogApps: List<AppCandidate>,
+        currentConfig: LauncherConfig,
+        preferredFocusItemId: String?,
+    ) {
         val allItems = catalogApps.map(HomeItem::App) + currentConfig.shortcuts.map(HomeItem::Web)
         val sections = HomeItemSectionsPolicy.compose(allItems, currentConfig.favoriteItemIds)
         favoriteItems = sections.favorites

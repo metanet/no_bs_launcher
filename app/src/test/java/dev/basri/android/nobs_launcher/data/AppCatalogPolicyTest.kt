@@ -63,4 +63,24 @@ class AppCatalogPolicyTest {
         assertEquals(1, result.size)
         assertEquals("FirstActivity", result.single().activityName)
     }
+
+    @Test
+    fun artworkLoadsOnlyAfterPackageDeduplication() {
+        var artworkLoads = 0
+        val result = AppCatalogPolicy.selectAndLoadArtwork(
+            candidates = listOf(
+                AppCandidate("app.video", "Video", LaunchKind.MOBILE, "MobileActivity"),
+                AppCandidate("app.video", "Video", LaunchKind.TV, "TvActivity"),
+            ),
+            selfPackage = "dev.basri.android.nobs_launcher",
+            artworkLoader = {
+                artworkLoads += 1
+                null
+            },
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(1, artworkLoads)
+        assertEquals("TvActivity", result.single().activityName)
+    }
 }

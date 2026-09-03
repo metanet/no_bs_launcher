@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import dev.basri.android.nobs_launcher.BuildConfig
 import dev.basri.android.nobs_launcher.R
 import dev.basri.android.nobs_launcher.data.AppCatalog
+import dev.basri.android.nobs_launcher.data.CatalogRequest
 import dev.basri.android.nobs_launcher.data.LayoutStore
 import dev.basri.android.nobs_launcher.databinding.ActivitySettingsBinding
 import dev.basri.android.nobs_launcher.model.HomeItemId
@@ -27,6 +28,7 @@ class SettingsActivity : Activity() {
     private lateinit var adapter: ManageAppsAdapter
     private lateinit var workingConfig: LauncherConfig
     private var isFirstRun = false
+    private var catalogRequest: CatalogRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,7 +65,11 @@ class SettingsActivity : Activity() {
         }
         binding.availableApps.layoutManager = LinearLayoutManager(this)
         binding.availableApps.adapter = adapter
-        adapter.submit(AppCatalog(this).loadApps(), workingConfig.selectedPackages)
+        catalogRequest = AppCatalog.shared(this).loadApps { apps ->
+            if (!isFinishing && !isDestroyed) {
+                adapter.submit(apps, workingConfig.selectedPackages)
+            }
+        }
 
         binding.openAndroidSettings.setOnClickListener {
             runCatching { startActivity(Intent(Settings.ACTION_SETTINGS)) }
@@ -89,6 +95,12 @@ class SettingsActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) enterImmersiveMode()
+    }
+
+    override fun onDestroy() {
+        catalogRequest?.cancel()
+        catalogRequest = null
+        super.onDestroy()
     }
 
     private fun saveAndFinish() {

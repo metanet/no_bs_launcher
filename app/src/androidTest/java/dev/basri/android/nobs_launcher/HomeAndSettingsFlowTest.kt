@@ -641,7 +641,7 @@ class HomeAndSettingsFlowTest {
         val (first, second) = uniqueCatalogApps(2)
         val favoritePackages = listOf(second.packageName, first.packageName)
         val sections = HomeAppSectionsPolicy.compose(
-            catalogApps = AppCatalog(context).loadApps(),
+            catalogApps = AppCatalog.shared(context).loadAppsBlocking(),
             favoritePackages = favoritePackages,
         )
         LayoutStore(context).save(
@@ -712,7 +712,10 @@ class HomeAndSettingsFlowTest {
         ActivityScenario.launch(HomeActivity::class.java).use {
             onView(withId(R.id.app_grid)).check { view, _ ->
                 val grid = view as RecyclerView
-                assertEquals(AppCatalog(context).loadApps().size, grid.adapter?.itemCount)
+                assertEquals(
+                    AppCatalog.shared(context).loadAppsBlocking().size,
+                    grid.adapter?.itemCount,
+                )
                 assertTrue(
                     (0 until grid.childCount).none { index ->
                         grid.getChildAt(index).id == R.id.app_separator
@@ -1052,7 +1055,7 @@ class HomeAndSettingsFlowTest {
     @Test
     fun failedLaunchKeepsHomeResumedAndShowsAnError() {
         val fixturePackage = InstrumentationRegistry.getInstrumentation().context.packageName
-        val brokenApp = AppCatalog(context).loadApps().single {
+        val brokenApp = AppCatalog.shared(context).loadAppsBlocking().single {
             it.packageName == fixturePackage && it.activityName.endsWith("ProtectedLauncherActivity")
         }
         LayoutStore(context).save(completedConfig(listOf(brokenApp.packageName)))
@@ -1065,7 +1068,7 @@ class HomeAndSettingsFlowTest {
     }
 
     private fun uniqueCatalogApps(count: Int): List<AppCandidate> {
-        val unique = AppCatalog(context).loadApps()
+        val unique = AppCatalog.shared(context).loadAppsBlocking()
             .groupBy { it.label.lowercase() }
             .values
             .filter { it.size == 1 }
@@ -1074,7 +1077,7 @@ class HomeAndSettingsFlowTest {
         return unique.take(count)
     }
 
-    private fun landscapeCatalogApp(): AppCandidate = AppCatalog(context).loadApps()
+    private fun landscapeCatalogApp(): AppCandidate = AppCatalog.shared(context).loadAppsBlocking()
         .groupBy { it.label.lowercase() }
         .values
         .filter { it.size == 1 }
