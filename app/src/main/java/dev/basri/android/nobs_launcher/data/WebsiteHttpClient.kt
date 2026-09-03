@@ -2,9 +2,7 @@ package dev.basri.android.nobs_launcher.data
 
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
-import okhttp3.Authenticator
 import okhttp3.Call
-import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -26,19 +24,10 @@ fun interface WebsiteProbeGateway {
     fun probe(url: String, cancellation: CancellationRegistration): WebsiteProbeResult = probe(url)
 }
 
-internal fun newWebsiteProbeOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
-    .cookieJar(CookieJar.NO_COOKIES)
-    .authenticator(Authenticator.NONE)
-    .proxyAuthenticator(Authenticator.NONE)
-    .cache(null)
-    .followRedirects(false)
-    .followSslRedirects(false)
-    .retryOnConnectionFailure(false)
-    .connectTimeout(PER_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-    .readTimeout(PER_OPERATION_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-    .callTimeout(DEFAULT_OVERALL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-    .rejectUnexpectedPrivatePeers()
-    .build()
+internal fun newWebsiteProbeOkHttpClient(): OkHttpClient = newPrivateHttpClient(
+    perOperationTimeoutMillis = PER_OPERATION_TIMEOUT_MILLIS,
+    overallTimeoutMillis = DEFAULT_OVERALL_TIMEOUT_MILLIS,
+)
 
 private val WEBSITE_PROBE_HTTP_CLIENT: OkHttpClient by lazy(::newWebsiteProbeOkHttpClient)
 

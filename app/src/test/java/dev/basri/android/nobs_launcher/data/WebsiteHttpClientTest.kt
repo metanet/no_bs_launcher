@@ -48,6 +48,15 @@ class WebsiteHttpClientTest {
     }
 
     @Test
+    fun pageAndFaviconClientsShareConnectionResources() {
+        val pageClient = newWebsiteProbeOkHttpClient()
+        val faviconClient = newFaviconOkHttpClient()
+
+        assertSame(pageClient.connectionPool, faviconClient.connectionPool)
+        assertSame(pageClient.dispatcher, faviconClient.dispatcher)
+    }
+
+    @Test
     fun classifiesStatusesAndClosesEveryResponse() {
         listOf(200, 204, 299, 401, 403).forEach { status ->
             val body = TrackingResponseBody("ignored", "application/json")

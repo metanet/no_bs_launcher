@@ -2,9 +2,7 @@ package dev.basri.android.nobs_launcher.data
 
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
-import okhttp3.Authenticator
 import okhttp3.Call
-import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
@@ -18,19 +16,10 @@ fun interface FaviconBytesFetcher {
     fun fetch(iconUrl: String, timeoutMillis: Long): ByteArray? = fetch(iconUrl)
 }
 
-internal fun newFaviconOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
-    .cookieJar(CookieJar.NO_COOKIES)
-    .authenticator(Authenticator.NONE)
-    .proxyAuthenticator(Authenticator.NONE)
-    .cache(null)
-    .followRedirects(false)
-    .followSslRedirects(false)
-    .retryOnConnectionFailure(false)
-    .connectTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-    .readTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-    .callTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
-    .rejectUnexpectedPrivatePeers()
-    .build()
+internal fun newFaviconOkHttpClient(): OkHttpClient = newPrivateHttpClient(
+    perOperationTimeoutMillis = TIMEOUT_MILLIS,
+    overallTimeoutMillis = TIMEOUT_MILLIS,
+)
 
 private val FAVICON_HTTP_CLIENT: OkHttpClient by lazy(::newFaviconOkHttpClient)
 
