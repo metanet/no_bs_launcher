@@ -708,3 +708,12 @@
   install, release UI smoke checks and crash/ANR review, fast-forward local
   `main` without pushing, restore stay-awake, and power off the TV. No audio or
   volume command has been sent.
+- The complete signed gate passed: shell syntax and ShellCheck, debug/release
+  lint, 107/107 debug unit tests, 107/107 release unit tests, 48/48 connected
+  tests on Box R, connectedCheck, both assemblies, R8/resource shrinking, and
+  the pinned release-certificate check. The final repository-only log update
+  is committed before rebuilding the exact release artifact for delivery.
+- Remaining: rebuild that clean-HEAD release APK, guarded in-place install,
+  release UI smoke checks and crash/ANR review, fast-forward local `main`
+  without pushing, restore stay-awake to 0, and power off the TV. No audio or
+  volume command has been sent.
