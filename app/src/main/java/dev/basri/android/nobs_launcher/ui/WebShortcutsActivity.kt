@@ -28,6 +28,10 @@ class WebShortcutsActivity : Activity() {
     private lateinit var favicons: FaviconRepository
     private lateinit var service: WebShortcutService
     private var activeSaveRequest: SaveShortcutRequest? = null
+    private var activeEditorDialog: AlertDialog? = null
+    private var activeEditorBinding: DialogWebShortcutBinding? = null
+    private var activeEditorUuid: String? = null
+    private var editorSaveInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,8 +52,22 @@ class WebShortcutsActivity : Activity() {
         binding.addShortcut.setOnClickListener { showEditor(null) }
         binding.backToSettings.setOnClickListener { finish() }
 
-        val requestedEdit = intent.getStringExtra(EXTRA_EDIT_SHORTCUT_ID)
-        if (requestedEdit != null && savedInstanceState == null) {
+        if (savedInstanceState?.getBoolean(STATE_EDITOR_OPEN) == true) {
+            binding.root.post {
+                val uuid = savedInstanceState.getString(STATE_EDITOR_UUID)
+                val shortcut = uuid?.let { requestedUuid ->
+                    store.load().shortcuts.firstOrNull { it.uuid == requestedUuid }
+                }
+                showEditor(
+                    shortcut = shortcut,
+                    initialName = savedInstanceState.getString(STATE_EDITOR_NAME).orEmpty(),
+                    initialUrl = savedInstanceState.getString(STATE_EDITOR_URL).orEmpty(),
+                    restartSave = savedInstanceState.getBoolean(STATE_EDITOR_SAVING),
+                )
+            }
+        } else {
+            val requestedEdit = intent.getStringExtra(EXTRA_EDIT_SHORTCUT_ID)
+            if (requestedEdit == null) return
             binding.root.post {
                 store.load().shortcuts
                     .firstOrNull { it.uuid == requestedEdit }
@@ -75,6 +93,19 @@ class WebShortcutsActivity : Activity() {
         super.onDestroy()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        val editor = activeEditorBinding
+        val dialog = activeEditorDialog
+        if (editor != null && dialog?.isShowing == true) {
+            outState.putBoolean(STATE_EDITOR_OPEN, true)
+            outState.putString(STATE_EDITOR_UUID, activeEditorUuid)
+            outState.putString(STATE_EDITOR_NAME, editor.shortcutName.text.toString())
+            outState.putString(STATE_EDITOR_URL, editor.shortcutUrl.text.toString())
+            outState.putBoolean(STATE_EDITOR_SAVING, editorSaveInProgress)
+        }
+        super.onSaveInstanceState(outState)
+    }
+
     private fun refresh() {
         val shortcuts = store.load().shortcuts
         adapter.submit(shortcuts)
@@ -85,10 +116,15 @@ class WebShortcutsActivity : Activity() {
         }
     }
 
-    private fun showEditor(shortcut: WebShortcut?) {
+    private fun showEditor(
+        shortcut: WebShortcut?,
+        initialName: String = shortcut?.name.orEmpty(),
+        initialUrl: String = shortcut?.url.orEmpty(),
+        restartSave: Boolean = false,
+    ) {
         val editor = DialogWebShortcutBinding.inflate(layoutInflater)
-        editor.shortcutName.setText(shortcut?.name.orEmpty())
-        editor.shortcutUrl.setText(shortcut?.url.orEmpty())
+        editor.shortcutName.setText(initialName)
+        editor.shortcutUrl.setText(initialUrl)
         val dialog = AlertDialog.Builder(this)
             .setTitle(if (shortcut == null) R.string.add_shortcut else R.string.edit_shortcut)
             .setView(editor.root)
@@ -96,18 +132,26 @@ class WebShortcutsActivity : Activity() {
             .setPositiveButton(R.string.save, null)
             .create()
         dialog.show()
+        activeEditorDialog = dialog
+        activeEditorBinding = editor
+        activeEditorUuid = shortcut?.uuid
+        editorSaveInProgress = false
         val positiveButton = dialog.getButton(DialogInterface.BUTTON_POSITIVE)
-        var saveInProgress = false
         dialog.setOnDismissListener {
-            saveInProgress = false
+            editorSaveInProgress = false
             activeSaveRequest?.cancel()
             activeSaveRequest = null
+            if (activeEditorDialog === dialog) {
+                activeEditorDialog = null
+                activeEditorBinding = null
+                activeEditorUuid = null
+            }
         }
         positiveButton.setOnClickListener {
-            if (saveInProgress) return@setOnClickListener
+            if (editorSaveInProgress) return@setOnClickListener
             editor.shortcutName.error = null
             editor.shortcutUrl.error = null
-            saveInProgress = true
+            editorSaveInProgress = true
             setEditorChecking(editor, positiveButton, checking = true)
             activeSaveRequest = service.save(
                 existingUuid = shortcut?.uuid,
@@ -124,12 +168,12 @@ class WebShortcutsActivity : Activity() {
                             !dialog.isShowing ||
                             isFinishing ||
                             isDestroyed ||
-                            !saveInProgress
+                            !editorSaveInProgress
                         ) {
                             return@post
                         }
                         activeSaveRequest = null
-                        saveInProgress = false
+                        editorSaveInProgress = false
                         when (result) {
                             is SaveShortcutResult.Invalid -> {
                                 setEditorChecking(editor, positiveButton, checking = false)
@@ -160,6 +204,7 @@ class WebShortcutsActivity : Activity() {
             )
         }
         editor.shortcutName.requestFocus()
+        if (restartSave) editor.root.post(positiveButton::performClick)
     }
 
     private fun setEditorChecking(
@@ -222,5 +267,10 @@ class WebShortcutsActivity : Activity() {
 
     companion object {
         const val EXTRA_EDIT_SHORTCUT_ID = "edit_shortcut_id"
+        private const val STATE_EDITOR_OPEN = "shortcut_editor_open"
+        private const val STATE_EDITOR_UUID = "shortcut_editor_uuid"
+        private const val STATE_EDITOR_NAME = "shortcut_editor_name"
+        private const val STATE_EDITOR_URL = "shortcut_editor_url"
+        private const val STATE_EDITOR_SAVING = "shortcut_editor_saving"
     }
 }

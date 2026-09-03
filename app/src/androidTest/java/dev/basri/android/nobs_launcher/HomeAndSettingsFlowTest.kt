@@ -577,6 +577,39 @@ class HomeAndSettingsFlowTest {
     }
 
     @Test
+    fun settingsRecreationPreservesUnsavedControls() {
+        LayoutStore(context).save(completedConfig().copy(welcomeText = "Stored"))
+
+        ActivityScenario.launch(SettingsActivity::class.java).use { scenario ->
+            onView(withId(R.id.welcome_text)).perform(replaceText("Unsaved draft"))
+            onView(withId(R.id.show_location)).perform(click())
+
+            scenario.recreate()
+
+            onView(withId(R.id.welcome_text)).check(matches(withText("Unsaved draft")))
+            onView(withId(R.id.show_location)).check(matches(not(isChecked())))
+        }
+    }
+
+    @Test
+    fun shortcutEditorRecreationPreservesUnsavedFields() {
+        LayoutStore(context).save(completedConfig())
+
+        ActivityScenario.launch(WebShortcutsActivity::class.java).use { scenario ->
+            onView(withId(R.id.add_shortcut)).perform(click())
+            onView(withId(R.id.shortcut_name)).perform(replaceText("Draft shortcut"))
+            onView(withId(R.id.shortcut_url)).perform(replaceText("https://example.com/draft"))
+
+            scenario.recreate()
+
+            onView(withId(R.id.shortcut_name)).check(matches(withText("Draft shortcut")))
+            onView(withId(R.id.shortcut_url)).check(
+                matches(withText("https://example.com/draft")),
+            )
+        }
+    }
+
+    @Test
     fun legacyPackageFavoritesMigrateAtomicallyInExactOrder() {
         val preferences = context.getSharedPreferences(
             LayoutStore.PREFERENCES_NAME,
