@@ -15,7 +15,6 @@
     <string name="build_information">Build information</string>
     <string name="build_hash">Build hash: %1$s</string>
     <string name="build_date">Build date: %1$s</string>
-    <string name="wifi_unavailable">Wi-Fi unavailable</string>
     <string name="location_unavailable">Location unavailable</string>
     <string name="no_apps_selected">No apps selected. Open Manage apps to choose what appears here.</string>
     <string name="unable_to_open">Unable to open %1$s</string>
