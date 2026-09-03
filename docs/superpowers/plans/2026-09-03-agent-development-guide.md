@@ -185,7 +185,7 @@ rules, human workflow/README link, and design/plan records in coherent commits.
 Include the verification commands in each commit body. Do not amend existing
 commits or rewrite any commit in this step.
 
-- [ ] **Step 4: Integrate and push**
+- [x] **Step 4: Integrate and push**
 
 After explicit remote and integration authorization, fetch `origin/main`. If
 the remote advanced, rebase only the unshared documentation stack and only when
