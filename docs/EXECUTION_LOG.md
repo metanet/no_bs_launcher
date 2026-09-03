@@ -685,3 +685,26 @@
   the 37-test connected report, and the completed alignment plan all pass.
   Changes remain intentionally uncommitted on `feature/web-shortcuts`. No Home,
   power, mute, unmute, or volume command was sent.
+
+## 2026-09-03 - Full reliability, security, and performance remediation
+
+- Created a dedicated remediation worktree from local `main` and recorded the
+  agreed design and implementation plan before changing production code.
+- Completed separate, reviewable commits for every audit finding: safe
+  instrumentation fixtures, transient-favorite preservation, correct VPN
+  monitoring, URL/probe/privacy hardening, cancellable network calls,
+  application-scoped asynchronous app/favicon work, bounded caches and
+  deadlines, lifecycle state restoration, cheaper stats polling, signer and
+  dependency verification, R8 optimization, and obsolete-resource cleanup.
+- Each issue passed its focused JVM, build, script, or Box R instrumentation
+  gate before commit. The 0.5.0/code 10 contract test was first observed failing
+  against 0.4.1/code 9, then passed after the release metadata change.
+- Two focused UI runs initially failed because the Box R entered its Android
+  dream while the suite was running; logcat showed Home stopped before Espresso
+  reported no resumed activity. The device's original stay-awake value was 0.
+  Temporarily enabling stay-awake and stopping the dream made both unchanged
+  tests pass. Restore that original value before the final power-off.
+- Remaining: run the complete signed local/connected gate, guarded in-place
+  install, release UI smoke checks and crash/ANR review, fast-forward local
+  `main` without pushing, restore stay-awake, and power off the TV. No audio or
+  volume command has been sent.
