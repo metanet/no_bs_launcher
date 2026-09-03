@@ -6,6 +6,7 @@ keychain_service="dev.basri.android.nobs_launcher.release"
 keychain_account="basri"
 apksigner="/opt/homebrew/share/android-commandlinetools/build-tools/36.0.0/apksigner"
 apk="$project_dir/app/build/outputs/apk/release/app-release.apk"
+expected_certificate_digest="d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88"
 
 if [[ ! -x "$apksigner" ]]; then
     echo "Missing apksigner: $apksigner" >&2
@@ -40,5 +41,11 @@ if ! grep -q '^Verifies$' <<<"$verification"; then
 fi
 
 certificate_digest="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<<"$verification")"
+if [[ "$certificate_digest" != "$expected_certificate_digest" ]]; then
+    echo "Release APK signer does not match the pinned certificate." >&2
+    echo "Expected: $expected_certificate_digest" >&2
+    echo "Actual:   ${certificate_digest:-missing}" >&2
+    exit 1
+fi
 echo "Signed release APK: $apk"
 echo "Certificate SHA-256: $certificate_digest"
