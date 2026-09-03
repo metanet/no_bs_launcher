@@ -1,2 +1,2 @@
--keep class dev.basri.android.nobs_launcher.ui.HomeActivity { *; }
--keep class dev.basri.android.nobs_launcher.ui.SettingsActivity { *; }
+# Android Gradle Plugin generated rules retain manifest components. Keep this
+# file for future narrowly scoped rules without disabling activity optimization.
