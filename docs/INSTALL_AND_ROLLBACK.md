@@ -1,27 +1,38 @@
 # No bullshit launcher installation and rollback
 
-No bullshit launcher is a private Android TV launcher with package name
-`dev.basri.android.nobs_launcher`. The same signed APK is intended for Box R and
-Xiaomi Android TV devices running Android 6.0 or newer.
+No bullshit launcher is a vendor-neutral Android TV launcher with package name
+`dev.basri.android.nobs_launcher`. It supports Android TV 6.0 / API 23 and
+newer.
 
-## Build and install
+## Release signing, build, and install
 
-The signing key is stored outside this project at
-`/Users/basri/.android/kahveci-home-release.jks`. Its password is stored in the
-macOS login keychain under service
-`dev.basri.android.nobs_launcher.release`. The scripts never print it.
+Keep release signing material outside the repository. The ignored
+`keystore.properties` file identifies the external key without containing its
+password:
 
-With the TV connected and authorized over ADB:
-
-```bash
-scripts/build_release_apk.sh
-scripts/install_release_apk.sh 192.168.1.154:5555
+```properties
+storeFile=<release-keystore-path>
+keyAlias=<release-key-alias>
 ```
 
-The build script runs lint, all local tests, all connected-device tests, and
-both debug and release builds before accepting the signed APK. The install
-script uses only `adb install -r`; it refuses to update an existing package
-whose signing certificate differs.
+The maintainer release script retrieves signing passwords from an operating
+system credential store and must not print them. Never put a keystore,
+credential, device address, or local secret-store identifier in documentation
+or source control.
+
+With one authorized Android TV or emulator connected over ADB, scope connected
+tests to that target, build the signed release, and install it:
+
+```bash
+ANDROID_SERIAL=<device-serial> scripts/build_release_apk.sh
+scripts/install_release_apk.sh <device-serial>
+```
+
+The build script runs lint, all local and connected tests, and both debug and
+release builds before accepting the signed APK. The install script verifies
+the pinned signing certificate, uses only `adb install -r`, and refuses to
+update an installed package signed by a different key. Disconnect every
+unauthorized device before running either command.
 
 ## Home app list controls
 
@@ -54,122 +65,141 @@ address. A shortcut appears as a normal Home tile and opens through Android's
 default web browser. New shortcuts begin in the alphabetical section and can
 be promoted to Favorites from their Home long-press menu.
 
-Saving a shortcut first normalizes the user-configured HTTP(S) page and sends a
-direct GET. While this check runs, **Checking website...** is shown; Save, the
-name field, and the URL field are disabled, while Cancel remains available.
-Only 2xx, 401, and 403 responses are considered reachable. If the page is not
-accessible, the editor stays open, controls are re-enabled, and **Website is
-not accessible.** is shown inline on the URL. Nothing is persisted and an
-existing shortcut's metadata, favorite state, and icon are unchanged.
+Saving a shortcut normalizes the user-entered URL and sends a bounded `HEAD`
+request. The probe follows at most five allowed HTTP(S) redirects. A 2xx, 401,
+or 403 response is reachable; every other result is inaccessible. While the
+probe runs, **Checking website...** is shown; Save, the name field, and the URL
+field are disabled, while Cancel remains available. Cancellation stops the
+active probe. An inaccessible site leaves the editor open, re-enables its
+controls, shows **Website is not accessible.**, and does not change stored
+shortcut data.
 
-For a reachable page, the shortcut is persisted even if favicon discovery or
-download fails; the tile then uses the bundled globe fallback. Icon candidates
-are, in order: declared `rel=icon` or `rel=shortcut icon` candidates in
-document order, then declared Apple touch-icon candidates, with at most five
-declared candidates total, followed by the final page origin's
-`/favicon.ico`. Initial requests go only to the configured page and these
-declared candidate URLs (plus that final-page origin fallback); bounded
-HTTP(S) redirects may contact their HTTP(S) redirect targets. There is no
-third-party icon service. Icons are fetched only as part of saving or changing
-a shortcut, never by page JavaScript, a WebView, or a background refresh.
+The probe intentionally reads no page body, so it does not discover declared
+icon metadata from HTML. After a reachable shortcut is stored, the only
+favicon candidate is `/favicon.ico` at the final response URL's origin. A
+failed or invalid favicon uses the bundled globe fallback without undoing the
+shortcut save. Favicon fetching and image decoding are asynchronous and
+bounded, but are not treated as universally cancellable. There is no
+third-party icon service, WebView, page JavaScript, or background refresh.
+
+URLs containing credentials are rejected. The Home list hides query and
+fragment values, while storage and browser launch retain the full normalized
+URL. HTTPS requests may redirect only to HTTPS; a downgrade to HTTP is
+rejected. Starting from a public address rejects a redirect to a literal
+non-public address and rejects a non-public network peer, including a private
+DNS result. An explicitly entered local service using `localhost` or a literal
+non-public address is allowed to remain in local address space. Cleartext HTTP
+is used only when the user explicitly configures an HTTP shortcut. These same
+redirect and peer checks protect the favicon request.
 
 ## First launch and Home selection
 
 Open No bullshit launcher once, enter the optional welcome text, choose which
 system labels and panels to show, select favorite apps, and select Save. Wi-Fi
-is read from Android rather than typed into Settings. Android treats the SSID as
-location-sensitive, so approve the one-time location permission and keep the
-device's Location service enabled if the Wi-Fi name should be visible. The
-displayed location is the final component of the system timezone (for example,
-`Europe/London` displays `London`); it is not a GPS lookup. Android can then be
-asked to make the app Home:
+is read from Android rather than typed into Settings. Android treats the
+connected network name as location-sensitive, so approve the one-time location
+permission and keep the device's Location service enabled if that label should
+be visible. The displayed location is the final component of the system
+timezone; it is not a GPS lookup.
+
+Changing the Home app requires explicit authority for the named device. First
+record the current Home component and retain it as `<stock-home-component>`:
 
 ```bash
-adb -s 192.168.1.154:5555 shell cmd package set-home-activity --user 0 \
-  dev.basri.android.nobs_launcher/.ui.HomeActivity
-```
-
-Record the stock Home component before changing it:
-
-```bash
-adb -s 192.168.1.154:5555 shell cmd package resolve-activity --brief \
+adb -s <device-serial> shell cmd package resolve-activity --brief \
   -a android.intent.action.MAIN -c android.intent.category.HOME
 ```
 
-Confirm that Android actually resolves the requested component after pressing
-Home. Some Android TV firmware assigns the Home role but still gives its system
-launcher a higher resolver priority. Box R 4K Plus does this with
-`com.google.android.tvlauncher`; the tested reversible workaround is:
+Then ask Android to select No bullshit launcher and verify the resolver after
+pressing Home:
 
 ```bash
-adb -s 192.168.1.154:5555 shell pm disable-user --user 0 \
-  com.google.android.tvlauncher
-adb -s 192.168.1.154:5555 shell input keyevent KEYCODE_HOME
+adb -s <device-serial> shell cmd package set-home-activity --user 0 \
+  dev.basri.android.nobs_launcher/.ui.HomeActivity
+adb -s <device-serial> shell input keyevent KEYCODE_HOME
 ```
 
-This is device configuration, not vendor-specific code in the APK. Do not copy
-that package name to a different TV: first record and verify that device's own
-stock Home component.
+Home-role behavior differs between firmware versions. If the recorded stock
+launcher continues to override the selected Home component, do not guess a
+package name or copy a command from another device. Only with explicit
+device-specific authority and a tested rollback may the recorded stock package
+be disabled temporarily:
+
+```bash
+adb -s <device-serial> shell pm disable-user --user 0 <stock-home-package>
+adb -s <device-serial> shell input keyevent KEYCODE_HOME
+```
+
+Confirm the exact package belongs to the recorded stock Home component, record
+its original enabled state, and verify the requested Home component before
+ending the session.
 
 ## Rollback
 
-No bullshit launcher itself does not disable or remove another app. If the
-device-specific workaround above was used, re-enable the recorded stock Home
-package before selecting its component. The tested Box R rollback is:
+No bullshit launcher itself does not disable or remove another app. If an
+authorized setup temporarily disabled the recorded stock Home package, restore
+its original enabled state and selected component:
 
 ```bash
-adb -s 192.168.1.154:5555 shell pm enable --user 0 \
-  com.google.android.tvlauncher
-adb -s 192.168.1.154:5555 shell cmd package set-home-activity --user 0 \
-  com.google.android.tvlauncher/.MainActivity
-adb -s 192.168.1.154:5555 shell input keyevent KEYCODE_HOME
+adb -s <device-serial> shell pm enable --user 0 <stock-home-package>
+adb -s <device-serial> shell cmd package set-home-activity --user 0 \
+  <stock-home-component>
+adb -s <device-serial> shell input keyevent KEYCODE_HOME
 ```
 
-Alternatively, clear the current default and press Home to use Android's
-launcher chooser:
+Run the `enable` command only when the package was enabled before setup. If no
+package state changed, clear this launcher's preferred-activity state and press
+Home to use Android's launcher chooser:
 
 ```bash
-adb -s 192.168.1.154:5555 shell cmd package clear-preferred-activities \
+adb -s <device-serial> shell cmd package clear-preferred-activities \
   dev.basri.android.nobs_launcher
+adb -s <device-serial> shell input keyevent KEYCODE_HOME
 ```
 
-Do not uninstall either launcher to switch between them.
+Verify that Android resolves the recorded stock component. Do not uninstall a
+launcher or clear its data to switch Home apps.
 
 ## Verified release
 
 - APK: `app/build/outputs/apk/release/app-release.apk`
 - Version: `0.5.0` (`versionCode=10`)
-- Verify the artifact SHA-256 with `shasum -a 256 app/build/outputs/apk/release/app-release.apk`.
+- Verify the artifact SHA-256 with
+  `shasum -a 256 app/build/outputs/apk/release/app-release.apk`.
 - Build identity is available from the launcher's **Build info** dialog.
 - Minimum Android: 6.0 / API 23
 - Signing certificate SHA-256:
   `d1702f54c1ba471b3a719c89dd8b60bc5e5f2445364c155027761c75f8a9cd88`
 
+The version and certificate digest are public release identity, not signing
+credentials.
+
 ## Privacy boundary
 
 The release requests `android.permission.ACCESS_COARSE_LOCATION`,
 `android.permission.ACCESS_FINE_LOCATION`,
-`android.permission.ACCESS_NETWORK_STATE`, `android.permission.ACCESS_WIFI_STATE`,
-`android.permission.INTERNET`, and `android.permission.REQUEST_DELETE_PACKAGES`.
-Fine location and Wi-Fi state are used only to ask Android for the connected
-SSID; the launcher performs no Wi-Fi scan, GPS lookup, or background location
-access. Internet access is used only for
-the user-triggered website check and favicon requests described above. Runtime
-HTTP uses OkHttp `5.4.0`. Requests use no cookies, HTTP authentication,
-proxy authentication, or response cache. There is no page JavaScript, WebView,
-or background refresh. Page HTML is read up to 256 KiB; page checking allows at
-most five redirects, 4 seconds per connection/read operation, and 12 seconds
-overall across redirects. Icon responses up to 256 KiB are accepted; each icon
-request allows at most five redirects and has a hard 4-second limit. HTTP and
-HTTPS are the only schemes; cleartext HTTP is deliberately permitted for
-user-configured HTTP destinations, their icon URLs, and any HTTP redirect
-targets reached from HTTP or HTTPS initial requests.
+`android.permission.ACCESS_NETWORK_STATE`,
+`android.permission.ACCESS_WIFI_STATE`, `android.permission.INTERNET`, and
+`android.permission.REQUEST_DELETE_PACKAGES`. Location and Wi-Fi state are used
+only to ask Android for the connected network label; the launcher performs no
+Wi-Fi scan, GPS lookup, or background location access.
+
+Internet access is limited to the user-triggered website probe and favicon
+request described above. Runtime HTTP uses OkHttp `5.4.0` with no cookies,
+HTTP authentication, proxy authentication, response cache, automatic
+redirects, or connection retries. The cancellable `HEAD` probe allows at most
+five redirects, 4 seconds per connect/read operation, and 12 seconds overall.
+It reads no response body. The final-origin favicon `GET` accepts at most 256
+KiB, follows at most five allowed redirects, and has a hard 4-second deadline.
+HTTPS downgrades and unexpected private-network destinations are rejected as
+described above.
 
 The launcher has no background-location, analytics, notification-listener,
-accessibility, or broad package-query permission. The welcome text, visibility
-settings, URLs, favorites, and favicon files remain in app-private local storage
-with Android backup and device transfer disabled. Wi-Fi and timezone-derived
-location labels are not user-editable or persisted.
+accessibility, or broad package-query permission. Welcome text, visibility
+settings, shortcut URLs, favorites, and favicon files remain in app-private
+local storage with Android backup and device transfer disabled. Connected
+network and timezone-derived location labels are not user-editable or
+persisted.
 
 VPN status is provider-neutral. The launcher displays `VPN connected` whenever
 Android reports an active VPN transport and the panel is enabled. It does not
