@@ -32,10 +32,16 @@ val buildGitHash = if (gitRevision == "unknown" || !hasWorkspaceChanges) {
 } else {
     "$gitRevision-dirty"
 }
-val buildInstant = System.getenv("SOURCE_DATE_EPOCH")
+val gitCommitEpochSeconds = providers.exec {
+    commandLine("git", "show", "-s", "--format=%ct", "HEAD")
+    workingDir(rootProject.projectDir)
+    isIgnoreExitValue = true
+}.standardOutput.asText.get().trim().toLongOrNull()
+val buildEpochSeconds = System.getenv("SOURCE_DATE_EPOCH")
     ?.toLongOrNull()
-    ?.let(Instant::ofEpochSecond)
-    ?: Instant.now()
+    ?: gitCommitEpochSeconds
+    ?: 0L
+val buildInstant = Instant.ofEpochSecond(buildEpochSeconds)
 val buildDateUtc = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'")
     .withZone(ZoneOffset.UTC)
     .format(buildInstant)

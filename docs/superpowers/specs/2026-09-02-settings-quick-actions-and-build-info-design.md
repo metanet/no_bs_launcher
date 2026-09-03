@@ -43,8 +43,9 @@ toggles and above the app list. It shows:
 - Build hash: the first 12 characters of the Git commit used to configure the
   build. `-dirty` is appended when tracked or untracked workspace changes are
   present. If Git metadata is unavailable, it reads `unknown`.
-- Build date: the Gradle configuration time formatted in UTC. When
-  `SOURCE_DATE_EPOCH` is set, that timestamp is used for reproducible builds.
+- Build date: `SOURCE_DATE_EPOCH` when provided, otherwise the Git commit time,
+  formatted in UTC. If neither is available, the Unix epoch is used. This keeps
+  the value deterministic for repeated builds of the same source revision.
 
 Both values are generated into `BuildConfig` and rendered by
 `SettingsActivity`; no device permission or network access is involved.
